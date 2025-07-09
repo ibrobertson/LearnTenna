@@ -1,0 +1,1965 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced 3D Antenna Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+        
+        #canvas-container {
+            width: 100%;
+            height: 500px;
+            border: 2px solid #444;
+            border-radius: 10px;
+            background: #000;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        #fps-monitor {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #00ff00;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            border: 1px solid #333;
+            min-width: 60px;
+            text-align: center;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+        
+        @media (min-width: 1400px) {
+            .controls {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        .control-group {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        
+        .control-group h4 {
+            margin: 0 0 15px 0;
+            color: #fff;
+            text-align: center;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            min-width: 0;
+        }
+        
+        .control-item label {
+            min-width: 70px;
+            flex-shrink: 0;
+            font-size: 12px;
+            color: #ccc;
+        }
+        
+        .control-item input[type="range"] {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .control-item input[type="number"] {
+            width: 55px;
+            min-width: 55px;
+            max-width: 55px;
+            padding: 3px 4px;
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 3px;
+            color: white;
+            font-size: 11px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 2px;
+        }
+        
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .info-box {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .info-box h3 {
+            margin: 0 0 10px 0;
+            color: #fff;
+        }
+        
+        .info-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .info-box li {
+            margin: 8px 0;
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        .value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+        
+        .status-display {
+            text-align: center;
+            padding: 10px;
+            background-color: #333;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .debug-panel {
+            background-color: #1a1a2e;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 11px;
+            border: 1px solid #444;
+        }
+        
+        .debug-panel h4 {
+            margin: 0 0 8px 0;
+            color: #66ff66;
+        }
+        
+        .debug-value {
+            color: #ffff66;
+        }
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Advanced 3D Antenna Visualization</h1>
+        
+        <div id="canvas-container">
+            <div id="fps-monitor">FPS: --</div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h4>Antenna Parameters</h4>
+                <div class="control-item">
+                    <label>Length (m):</label>
+                    <input type="range" id="lengthSlider" min="1" max="100" value="20" step="0.1">
+                    <input type="number" id="lengthInput" min="1" max="100" value="20" step="0.1">
+                </div>
+                <div class="control-item">
+                    <label>Freq (MHz):</label>
+                    <input type="range" id="freqSlider" min="0.1" max="50" value="7.5" step="0.01">
+                    <input type="number" id="freqInput" min="0.1" max="50" value="7.5" step="0.01">
+                </div>
+                <div class="control-item">
+                    <label>Feed (%):</label>
+                    <input type="range" id="feedSlider" min="0" max="100" value="50" step="1">
+                    <input type="number" id="feedInput" min="0" max="100" value="50" step="1">
+                </div>
+                <div class="control-item">
+                    <label>Wire Ø (mm):</label>
+                    <input type="range" id="wireSlider" min="0.1" max="20" value="2" step="0.1">
+                    <input type="number" id="wireInput" min="0.1" max="20" value="2" step="0.1">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Animation</h4>
+                <div style="text-align: center;">
+                    <button id="playBtn">Play</button>
+                    <button id="pauseBtn" disabled>Pause</button>
+                    <button id="resetBtn">Reset</button>
+                </div>
+                <div class="status-display">
+                    <div id="timeDisplay">Time: 0°</div>
+                    <div id="phaseDisplay" style="font-size: 11px; color: #aaa; margin-top: 5px;">
+                        I-V Phase: <span id="phaseAngle">0°</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Matching Network</h4>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use1to1Balun"> 1:1 Balun</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use4to1Balun"> 4:1 Balun</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use9to1UnUn"> 9:1 UnUn</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use49to1UnUn"> 49:1 UnUn</label>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Visibility</h4>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showAntenna" checked> Antenna</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showCurrent" checked> Current</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showVoltage" checked> Voltage</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showFields" checked> Fields</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showAdvancedFields" checked> Field Lines</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showDebug"> Debug Info</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-box">
+                <h3>Current Settings</h3>
+                <ul>
+                    <li>Length: <span class="value" id="currentLength">20m</span></li>
+                    <li>Frequency: <span class="value" id="currentFreq">7.5 MHz</span></li>
+                    <li>Wavelength: <span class="value" id="currentWavelength">40.0m</span></li>
+                    <li>Electrical Length: <span class="value" id="currentElectricalLength">0.5λ</span></li>
+                    <li>Wire Diameter: <span class="value" id="currentWireDia">2.0mm</span></li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <h3>Feedpoint Analysis</h3>
+                <ul>
+                    <li>Feed Position: <span class="value" id="feedPositionDisplay">Center Fed (50%)</span></li>
+                    <li>Antenna Z: <span class="value" id="antennaImpedanceDisplay">73 Ω</span></li>
+                    <li>Matching: <span class="value" id="matchingTypeDisplay">None</span></li>
+                    <li>System Z: <span class="value" id="impedanceDisplay">73 Ω</span></li>
+                    <li>SWR (50Ω): <span class="value" id="swrDisplay">1.5:1</span></li>
+                    <li>Match Quality: <span class="value" id="qualityDisplay">Good</span></li>
+                    <li>Antenna Type: <span class="value" id="antennaType">Half-Wave Dipole</span></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="debug-panel" id="debugPanel" style="display: none;">
+            <h4>Debug Information</h4>
+            <div id="debugContent"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        'use strict';
+
+        // =====================================================================
+        // CONFIGURATION & CONSTANTS (Unchanged)
+        // =====================================================================
+        
+        const CONFIG = {
+            PHYSICS: {
+                SPEED_OF_LIGHT: 300,
+                FREE_SPACE_IMPEDANCE: 377,
+                STANDARD_IMPEDANCE: 50,
+                DIPOLE_BASE_RESISTANCE: 73.1,
+            },
+            LIMITS: {
+                MIN_RESISTANCE: 0.1,
+                MAX_RESISTANCE: 50000,
+                MIN_REACTANCE: -5000,
+                MAX_REACTANCE: 5000,
+                MIN_SWR: 1.0,
+                MAX_SWR: 999
+            },
+            MATCHING_NETWORKS: {
+                'use1to1Balun': { ratio: 1, name: '1:1 Balun' },
+                'use4to1Balun': { ratio: 4, name: '4:1 Balun' },
+                'use9to1UnUn': { ratio: 9, name: '9:1 UnUn' },
+                'use49to1UnUn': { ratio: 49, name: '49:1 UnUn' }
+            },
+            RENDERING: {
+                FIELD_OPACITY: 0.6,
+                AXIS_OPACITY: 0.3,
+                RING_SEGMENTS: 32,
+                CURVE_POINTS: 50,
+                AXIS_LENGTH: 15,
+                LABEL_DISTANCE: 16
+            }
+        };
+
+        // =====================================================================
+        // UTILITY FUNCTIONS (Unchanged)
+        // =====================================================================
+        
+        const PhysicsUtils = {
+            clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
+            log10: Math.log10 || ((x) => Math.log(x) / Math.LN10),
+            
+            formatImpedance: (resistance, reactance) => {
+                const R = Math.round(resistance);
+                const X = Math.round(reactance);
+                return Math.abs(X) < 1 ? `${R} Ω` : `${R} ${X >= 0 ? '+' : ''}j${X} Ω`;
+            },
+            
+            calculateSWR: (resistance, reactance, z0 = 50) => {
+                const reflectionCoeff = Math.abs((resistance - z0) / (resistance + z0));
+                return reflectionCoeff >= 0.999 ? 999 : (1 + reflectionCoeff) / (1 - reflectionCoeff);
+            },
+            
+            calculatePhaseAngle: (resistance, reactance) => {
+                return Math.atan2(reactance, resistance);
+            },
+
+            calculateImpedanceMagnitude: (resistance, reactance) => {
+                return Math.sqrt(resistance * resistance + reactance * reactance);
+            }
+        };
+
+        const Utils = {
+            clamp: PhysicsUtils.clamp  // Alias for backward compatibility
+        };
+
+        // =====================================================================
+        // ANTENNA PHYSICS ENGINE (Unchanged from previous refactor)
+        // =====================================================================
+        
+        class AntennaPhysicsEngine {
+            constructor() {
+                this._impedanceCache = new Map();
+                this._distributionCache = new Map();
+            }
+
+            getWavelength(frequency) {
+                return CONFIG.PHYSICS.SPEED_OF_LIGHT / frequency;
+            }
+
+            getElectricalLength(length, frequency) {
+                return length / this.getWavelength(frequency);
+            }
+
+            getWaveNumber(frequency) {
+                return 2 * Math.PI / this.getWavelength(frequency);
+            }
+
+            getLengthToRadiusRatio(length, wireDiameter) {
+                const wireRadius = wireDiameter / 2000;
+                return length / wireRadius;
+            }
+
+            calculateImpedance(params) {
+                const { length, frequency, feedPosition, wireDiameter } = params;
+                const key = this._getImpedanceCacheKey(params);
+                
+                if (this._impedanceCache.has(key)) {
+                    return this._impedanceCache.get(key);
+                }
+
+                const electricalLength = this.getElectricalLength(length, frequency);
+                const waveNumber = this.getWaveNumber(frequency);
+                const lengthToRadiusRatio = this.getLengthToRadiusRatio(length, wireDiameter);
+                
+                let impedance;
+                if (feedPosition === 0.5) {
+                    impedance = this._calculateCenterFedImpedance(length, electricalLength, waveNumber, lengthToRadiusRatio);
+                } else if (feedPosition === 0 || feedPosition === 1) {
+                    impedance = this._calculateEndFedImpedance(length, electricalLength, waveNumber, lengthToRadiusRatio);
+                } else {
+                    impedance = this._calculateOffCenterImpedance(length, electricalLength, waveNumber, lengthToRadiusRatio, feedPosition);
+                }
+                
+                const limitedImpedance = this._applyPhysicalLimits(impedance);
+                this._impedanceCache.set(key, limitedImpedance);
+                return limitedImpedance;
+            }
+
+            _calculateCenterFedImpedance(length, eLen, k, lToR) {
+                if (eLen < 0.1) {
+                    const resistance = Math.max(20 * Math.PI * Math.PI * eLen * eLen, 0.1);
+                    const reactance = -119.9 * (PhysicsUtils.log10(lToR) - 2.25) / (eLen * 2 * Math.PI);
+                    return { resistance, reactance };
+                }
+                
+                if (Math.abs(eLen - 0.5) < 0.05) {
+                    const wireReactance = 42.5 * (PhysicsUtils.log10(lToR) - 2.25);
+                    return {
+                        resistance: CONFIG.PHYSICS.DIPOLE_BASE_RESISTANCE,
+                        reactance: wireReactance * 0.02
+                    };
+                }
+                
+                const beta = k * length / 2;
+                const sinBeta = Math.sin(beta);
+                const cosBeta = Math.cos(beta);
+                
+                if (Math.abs(sinBeta) < 0.001) {
+                    return { resistance: 2000, reactance: 0 };
+                }
+                
+                const resistance = CONFIG.PHYSICS.DIPOLE_BASE_RESISTANCE * sinBeta * sinBeta;
+                const reactance = 43.1 * (cosBeta - Math.cos(k * length)) / sinBeta + 
+                                42.5 * (PhysicsUtils.log10(lToR) - 2.25) * 0.1;
+                
+                return { resistance, reactance };
+            }
+            
+            _calculateEndFedImpedance(length, eLen, k, lToR) {
+                if (Math.abs(eLen - 0.25) < 0.02) {
+                    return {
+                        resistance: CONFIG.PHYSICS.DIPOLE_BASE_RESISTANCE / 2,
+                        reactance: 21.25 * (PhysicsUtils.log10(lToR) - 2.25)
+                    };
+                }
+                
+                if (Math.abs(eLen - 0.5) < 0.02) {
+                    return { resistance: 2500, reactance: 0 };
+                }
+                
+                const sinK = Math.sin(k * length);
+                return Math.abs(sinK) < 0.001 ? 
+                    { resistance: 5000, reactance: 0 } :
+                    {
+                        resistance: Math.min(2500 / Math.abs(Math.cos(k * length / 2)), 15000),
+                        reactance: PhysicsUtils.clamp(CONFIG.PHYSICS.FREE_SPACE_IMPEDANCE * Math.tan(k * length / 2), -5000, 5000)
+                    };
+            }
+            
+            _calculateOffCenterImpedance(length, eLen, k, lToR, feedPos) {
+                const centerFed = this._calculateCenterFedImpedance(length, eLen, k, lToR);
+                const offsetFromCenter = Math.abs(feedPos - 0.5);
+                
+                const transformFactor = offsetFromCenter < 0.1 ?
+                    1 + offsetFromCenter * 2 :
+                    1 / (Math.cos(offsetFromCenter * k * length) ** 2);
+                
+                return {
+                    resistance: centerFed.resistance * transformFactor,
+                    reactance: centerFed.reactance * Math.sqrt(transformFactor)
+                };
+            }
+
+            _applyPhysicalLimits(impedance) {
+                return {
+                    resistance: PhysicsUtils.clamp(impedance.resistance, CONFIG.LIMITS.MIN_RESISTANCE, CONFIG.LIMITS.MAX_RESISTANCE),
+                    reactance: PhysicsUtils.clamp(impedance.reactance, CONFIG.LIMITS.MIN_REACTANCE, CONFIG.LIMITS.MAX_REACTANCE)
+                };
+            }
+
+            calculatePhaseRelationship(impedance) {
+                const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
+                const isResonant = Math.abs(impedance.reactance) < Math.max(15, impedance.resistance * 0.2);
+                
+                return {
+                    phaseAngle,
+                    isResonant,
+                    phaseDegrees: phaseAngle * 180 / Math.PI
+                };
+            }
+
+            calculateSpatialDistributions(params, positions) {
+                const key = this._getDistributionCacheKey(params, positions.length);
+                
+                if (this._distributionCache.has(key)) {
+                    return this._distributionCache.get(key);
+                }
+
+                const { length, frequency, feedPosition } = params;
+                const k = this.getWaveNumber(frequency);
+                const wireLength = length;
+                
+                const distributions = positions.map(x => 
+                    this._calculateFieldAmplitudesAtPosition(k, wireLength, feedPosition, x)
+                );
+                
+                const result = {
+                    current: distributions.map(d => d.current),
+                    voltage: distributions.map(d => d.voltage),
+                    positions: positions
+                };
+                
+                this._distributionCache.set(key, result);
+                return result;
+            }
+
+            _calculateFieldAmplitudesAtPosition(k, wireLength, feedPosition, x) {
+                let currentAmp, voltageAmp;
+                
+                if (feedPosition === 0.5) {
+                    const distanceFromCenter = Math.abs(x);
+                    const electricalDistance = k * distanceFromCenter;
+                    
+                    currentAmp = Math.cos(electricalDistance) * 2;
+                    const phaseSign = x >= 0 ? 1 : -1;
+                    voltageAmp = Math.sin(electricalDistance) * phaseSign * 4;
+                    
+                } else if (feedPosition === 0 || feedPosition === 1) {
+                    const feedX = (feedPosition - 0.5) * wireLength;
+                    const distanceFromFeed = Math.abs(x - feedX);
+                    const electricalDistance = k * distanceFromFeed;
+                    
+                    currentAmp = Math.cos(electricalDistance) * 1.8;
+                    voltageAmp = Math.sin(electricalDistance) * 3.5;
+                    
+                } else {
+                    const feedX = (feedPosition - 0.5) * wireLength;
+                    const distanceFromFeed = Math.abs(x - feedX);
+                    const distanceFromCenter = Math.abs(x);
+                    
+                    const feedElecDist = k * distanceFromFeed;
+                    const centerElecDist = k * distanceFromCenter;
+                    
+                    const centerWeight = 1 - Math.abs(feedPosition - 0.5) * 2;
+                    const endWeight = 1 - centerWeight;
+                    
+                    currentAmp = (Math.cos(centerElecDist) * centerWeight + 
+                                 Math.cos(feedElecDist) * endWeight) * 1.9;
+                    
+                    const leftSide = x < feedX ? -1 : 1;
+                    voltageAmp = (Math.sin(centerElecDist) * centerWeight * (x >= 0 ? 1 : -1) + 
+                                 Math.sin(feedElecDist) * endWeight * leftSide) * 3.8;
+                }
+                
+                return {
+                    current: PhysicsUtils.clamp(currentAmp, -10, 10),
+                    voltage: PhysicsUtils.clamp(voltageAmp, -10, 10)
+                };
+            }
+
+            applyMatchingNetwork(impedance, networkType) {
+                if (!networkType) {
+                    return { impedance, matchingType: "None" };
+                }
+                
+                const config = CONFIG.MATCHING_NETWORKS[networkType];
+                if (!config) {
+                    return { impedance, matchingType: "Unknown" };
+                }
+                
+                if (networkType === 'use1to1Balun') {
+                    return { impedance, matchingType: config.name };
+                }
+                
+                return {
+                    impedance: {
+                        resistance: impedance.resistance / config.ratio,
+                        reactance: impedance.reactance / config.ratio
+                    },
+                    matchingType: config.name
+                };
+            }
+
+            classifyAntennaType(params, impedance) {
+                const { feedPosition } = params;
+                const electricalLength = this.getElectricalLength(params.length, params.frequency);
+                const isResonant = Math.abs(impedance.reactance) < Math.max(15, impedance.resistance * 0.2);
+                
+                if (feedPosition === 0.5) {
+                    return this._classifyCenterFedAntenna(electricalLength, isResonant);
+                } else if (feedPosition === 0 || feedPosition === 1) {
+                    return this._classifyEndFedAntenna(electricalLength, isResonant);
+                } else {
+                    return this._classifyOffCenterAntenna(electricalLength, feedPosition);
+                }
+            }
+
+            _classifyCenterFedAntenna(eLen, isResonant) {
+                if (eLen < 0.1) return "Short Dipole";
+                if (Math.abs(eLen - 0.5) < 0.1) {
+                    return isResonant ? "Half-Wave Dipole" : "Near Half-Wave Dipole";
+                }
+                if (Math.abs(eLen - 1.0) < 0.05) return "Full-Wave Loop";
+                return eLen < 1.0 ? "Long Dipole" : "Multi-Wave Dipole";
+            }
+
+            _classifyEndFedAntenna(eLen, isResonant) {
+                if (eLen < 0.1) return "Short Monopole";
+                if (Math.abs(eLen - 0.25) < 0.02 && isResonant) return "Quarter-Wave Monopole";
+                if (Math.abs(eLen - 0.5) < 0.02) return "End-Fed Half-Wave";
+                return eLen < 1.0 ? "Long Monopole" : "Multi-Wave End-Fed";
+            }
+
+            _classifyOffCenterAntenna(eLen, feedPos) {
+                const offsetPercent = Math.round(Math.abs(feedPos - 0.5) * 200);
+                if (offsetPercent < 10) return "Near Center-Fed Dipole";
+                if (Math.abs(eLen - 0.5) < 0.1) {
+                    return `OCF Dipole (${Math.round(feedPos * 100)}%)`;
+                }
+                return `Off-Center Fed (${Math.round(feedPos * 100)}%)`;
+            }
+
+            _getImpedanceCacheKey(params) {
+                return `imp_${params.length}_${params.frequency}_${params.feedPosition}_${params.wireDiameter}`;
+            }
+
+            _getDistributionCacheKey(params, numPoints) {
+                return `dist_${params.length}_${params.frequency}_${params.feedPosition}_${numPoints}`;
+            }
+
+            clearCache() {
+                this._impedanceCache.clear();
+                this._distributionCache.clear();
+            }
+
+            getCacheStats() {
+                return {
+                    impedanceCacheSize: this._impedanceCache.size,
+                    distributionCacheSize: this._distributionCache.size
+                };
+            }
+        }
+
+        // =====================================================================
+        // ANTENNA MODEL (Unchanged from previous refactor)
+        // =====================================================================
+        
+        class AntennaModel {
+            constructor() {
+                this.length = 20;
+                this.frequency = 7.5;
+                this.feedPosition = 0.5;
+                this.wireDiameter = 2;
+                this.matchingNetwork = null;
+                this.physics = new AntennaPhysicsEngine();
+            }
+            
+            get wavelength() { return this.physics.getWavelength(this.frequency); }
+            get electricalLength() { return this.physics.getElectricalLength(this.length, this.frequency); }
+            get waveNumber() { return this.physics.getWaveNumber(this.frequency); }
+            get lengthToRadiusRatio() { return this.physics.getLengthToRadiusRatio(this.length, this.wireDiameter); }
+
+            calculateImpedance() {
+                return this.physics.calculateImpedance({
+                    length: this.length,
+                    frequency: this.frequency,
+                    feedPosition: this.feedPosition,
+                    wireDiameter: this.wireDiameter
+                });
+            }
+
+            getPhaseAngle() {
+                const impedance = this.calculateImpedance();
+                return this.physics.calculatePhaseRelationship(impedance).phaseAngle;
+            }
+
+            getAntennaType() {
+                const impedance = this.calculateImpedance();
+                return this.physics.classifyAntennaType({
+                    length: this.length,
+                    frequency: this.frequency,
+                    feedPosition: this.feedPosition,
+                    wireDiameter: this.wireDiameter
+                }, impedance);
+            }
+            
+            applyMatching(impedance) {
+                return this.physics.applyMatchingNetwork(impedance, this.matchingNetwork);
+            }
+
+            getSpatialDistributions(positions) {
+                return this.physics.calculateSpatialDistributions({
+                    length: this.length,
+                    frequency: this.frequency,
+                    feedPosition: this.feedPosition,
+                    wireDiameter: this.wireDiameter
+                }, positions);
+            }
+        }
+
+        // =====================================================================
+        // REFACTORED RENDERER COMPONENTS
+        // =====================================================================
+
+        // 1. SCENE3D - Basic Three.js scene setup, lighting, coordinate system
+        class Scene3D {
+            constructor(container) {
+                this.container = container;
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.axes = [];
+                
+                this.init();
+            }
+
+            init() {
+                // Create scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x000000);
+                
+                // Create camera
+                this.camera = new THREE.PerspectiveCamera(
+                    75, 
+                    this.container.clientWidth / this.container.clientHeight, 
+                    0.1, 
+                    1000
+                );
+                this.camera.position.set(15, 10, 15);
+                this.camera.lookAt(0, 0, 0);
+                
+                // Create renderer
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.container.appendChild(this.renderer.domElement);
+                
+                // Add lighting
+                this.setupLighting();
+                
+                // Add coordinate axes
+                this.addCoordinateAxes();
+            }
+
+            setupLighting() {
+                this.scene.add(new THREE.AmbientLight(0x404040, 0.6));
+                const light = new THREE.DirectionalLight(0xffffff, 0.8);
+                light.position.set(10, 10, 5);
+                this.scene.add(light);
+            }
+
+            addCoordinateAxes() {
+                const axisLength = CONFIG.RENDERING.AXIS_LENGTH;
+                const axisOpacity = CONFIG.RENDERING.AXIS_OPACITY;
+                
+                // X-axis (Red)
+                const xGeometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(axisLength, 0, 0)
+                ]);
+                const xMaterial = new THREE.LineBasicMaterial({ 
+                    color: 0xff0000, 
+                    transparent: true, 
+                    opacity: axisOpacity 
+                });
+                const xAxis = new THREE.Line(xGeometry, xMaterial);
+                this.scene.add(xAxis);
+                this.axes.push(xAxis);
+                
+                // Y-axis (Green)
+                const yGeometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, axisLength, 0)
+                ]);
+                const yMaterial = new THREE.LineBasicMaterial({ 
+                    color: 0x00ff00, 
+                    transparent: true, 
+                    opacity: axisOpacity 
+                });
+                const yAxis = new THREE.Line(yGeometry, yMaterial);
+                this.scene.add(yAxis);
+                this.axes.push(yAxis);
+                
+                // Z-axis (Blue)
+                const zGeometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, axisLength)
+                ]);
+                const zMaterial = new THREE.LineBasicMaterial({ 
+                    color: 0x0000ff, 
+                    transparent: true, 
+                    opacity: axisOpacity 
+                });
+                const zAxis = new THREE.Line(zGeometry, zMaterial);
+                this.scene.add(zAxis);
+                this.axes.push(zAxis);
+                
+                this.addAxisLabels();
+            }
+
+            addAxisLabels() {
+                const labelDistance = CONFIG.RENDERING.LABEL_DISTANCE;
+                const labelOpacity = 0.4;
+                const labelGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+                
+                // X label (red sphere)
+                const xLabelMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xff0000, 
+                    transparent: true, 
+                    opacity: labelOpacity 
+                });
+                const xLabel = new THREE.Mesh(labelGeometry, xLabelMaterial);
+                xLabel.position.set(labelDistance, 0, 0);
+                this.scene.add(xLabel);
+                this.axes.push(xLabel);
+                
+                // Y label (green sphere)
+                const yLabelMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x00ff00, 
+                    transparent: true, 
+                    opacity: labelOpacity 
+                });
+                const yLabel = new THREE.Mesh(labelGeometry, yLabelMaterial);
+                yLabel.position.set(0, labelDistance, 0);
+                this.scene.add(yLabel);
+                this.axes.push(yLabel);
+                
+                // Z label (blue sphere)
+                const zLabelMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x0000ff, 
+                    transparent: true, 
+                    opacity: labelOpacity 
+                });
+                const zLabel = new THREE.Mesh(labelGeometry, zLabelMaterial);
+                zLabel.position.set(0, 0, labelDistance);
+                this.scene.add(zLabel);
+                this.axes.push(zLabel);
+            }
+
+            handleResize() {
+                if (!this.camera || !this.renderer || !this.container) return;
+                this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+            }
+
+            render() {
+                if (this.renderer && this.scene && this.camera) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+            }
+
+            dispose() {
+                if (this.renderer) {
+                    this.renderer.dispose();
+                }
+            }
+        }
+
+        // 2. CAMERA CONTROLLER - Mouse interaction and camera movement
+        class CameraController {
+            constructor(scene3D) {
+                this.scene3D = scene3D;
+                this.spherical = { radius: 25, theta: 0, phi: Math.PI / 3 };
+                this.isDragging = false;
+                this.lastMouse = { x: 0, y: 0 };
+                
+                this.setupControls();
+            }
+
+            setupControls() {
+                if (!this.scene3D.renderer || !this.scene3D.renderer.domElement) return;
+                
+                this.scene3D.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                this.scene3D.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                this.scene3D.renderer.domElement.addEventListener('mouseup', () => this.onMouseUp());
+                this.scene3D.renderer.domElement.addEventListener('wheel', (e) => this.onWheel(e));
+            }
+
+            onMouseDown(e) {
+                this.isDragging = true;
+                this.lastMouse = { x: e.clientX, y: e.clientY };
+            }
+
+            onMouseMove(e) {
+                if (!this.isDragging) return;
+                const delta = { x: e.clientX - this.lastMouse.x, y: e.clientY - this.lastMouse.y };
+                this.spherical.theta += delta.x * 0.01;
+                this.spherical.phi = Utils.clamp(this.spherical.phi + delta.y * 0.01, 0.1, Math.PI - 0.1);
+                this.updateCamera();
+                this.lastMouse = { x: e.clientX, y: e.clientY };
+            }
+
+            onMouseUp() {
+                this.isDragging = false;
+            }
+
+            onWheel(e) {
+                e.preventDefault();
+                this.spherical.radius = Utils.clamp(this.spherical.radius * (1 + e.deltaY * 0.001), 5, 50);
+                this.updateCamera();
+            }
+
+            updateCamera() {
+                if (!this.scene3D.camera) return;
+                this.scene3D.camera.position.x = this.spherical.radius * Math.sin(this.spherical.phi) * Math.sin(this.spherical.theta);
+                this.scene3D.camera.position.y = this.spherical.radius * Math.cos(this.spherical.phi);
+                this.scene3D.camera.position.z = this.spherical.radius * Math.sin(this.spherical.phi) * Math.cos(this.spherical.theta);
+                this.scene3D.camera.lookAt(0, 0, 0);
+            }
+        }
+
+        // 3. ANTENNA RENDERER - Antenna geometry (wire + feedpoint)
+        class AntennaRenderer {
+            constructor(scene3D) {
+                this.scene3D = scene3D;
+                this.antenna = null;
+                this.feedPoint = null;
+            }
+
+            update(model) {
+                this.clear();
+                
+                try {
+                    const wireLength = model.length;
+                    
+                    // Create antenna wire
+                    const geometry = new THREE.CylinderGeometry(0.05, 0.05, wireLength, 16);
+                    const material = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+                    this.antenna = new THREE.Mesh(geometry, material);
+                    this.antenna.rotation.z = Math.PI / 2;
+                    this.scene3D.scene.add(this.antenna);
+                    
+                    // Create feedpoint
+                    const feedX = (model.feedPosition - 0.5) * wireLength;
+                    const feedGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+                    const feedMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+                    this.feedPoint = new THREE.Mesh(feedGeometry, feedMaterial);
+                    this.feedPoint.position.set(feedX, 0, 0);
+                    this.scene3D.scene.add(this.feedPoint);
+                } catch (error) {
+                    console.error('Error updating antenna:', error);
+                }
+            }
+
+            clear() {
+                if (this.antenna && this.scene3D.scene) { 
+                    this.scene3D.scene.remove(this.antenna); 
+                    this.antenna = null; 
+                }
+                if (this.feedPoint && this.scene3D.scene) { 
+                    this.scene3D.scene.remove(this.feedPoint); 
+                    this.feedPoint = null; 
+                }
+            }
+
+            setVisibility(visible) {
+                if (this.antenna) this.antenna.visible = visible;
+                if (this.feedPoint) this.feedPoint.visible = visible;
+            }
+        }
+
+        // 4. FIELD RENDERER - Current/voltage curves and electromagnetic fields
+        class FieldRenderer {
+            constructor(scene3D) {
+                this.scene3D = scene3D;
+                this.currentCurve = null;
+                this.voltageCurve = null;
+                this.eFields = [];
+                this.hFields = [];
+            }
+
+            update(model) {
+                this.clear();
+                
+                try {
+                    this.createCurrentVoltageCurves(model);
+                    this.createElectromagneticFields(model);
+                } catch (error) {
+                    console.error('Error updating fields:', error);
+                }
+            }
+
+            createCurrentVoltageCurves(model) {
+                const wireLength = model.length;
+                const numPoints = CONFIG.RENDERING.CURVE_POINTS;
+                
+                // Generate positions along the antenna
+                const positions = [];
+                for (let i = 0; i < numPoints; i++) {
+                    const x = (i / (numPoints - 1)) * wireLength - wireLength/2;
+                    positions.push(x);
+                }
+                
+                // Use physics engine to calculate distributions
+                const distributions = model.getSpatialDistributions(positions);
+                
+                // Create current curve (blue)
+                this.currentCurve = this.createCurve(
+                    positions.map(x => new THREE.Vector3(x, 0, 0)),
+                    distributions.current,
+                    0x00aaff
+                );
+                
+                // Create voltage curve (orange)
+                this.voltageCurve = this.createCurve(
+                    positions.map(x => new THREE.Vector3(x, 0, 0)),
+                    distributions.voltage,
+                    0xff6b35
+                );
+            }
+
+            createCurve(points, amplitudes, color) {
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                geometry.setAttribute('amplitude', new THREE.Float32BufferAttribute(amplitudes, 1));
+                const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
+                const curve = new THREE.Line(geometry, material);
+                curve.userData.amplitudes = amplitudes;
+                this.scene3D.scene.add(curve);
+                return curve;
+            }
+
+            createElectromagneticFields(model) {
+                const wireLength = model.length;
+                
+                this.createEFields(wireLength);
+                this.createHFields(wireLength);
+            }
+
+            createEFields(wireLength) {
+                // Create curved E-field lines (red) - from end to end
+                for (let i = 0; i < 4; i++) {
+                    const height = 1 + i * 0.8;
+                    
+                    // Create field line above antenna
+                    const fieldAbove = this.createEFieldLine(wireLength, height);
+                    this.eFields.push(fieldAbove);
+                    
+                    // Create field line below antenna
+                    const fieldBelow = this.createEFieldLine(wireLength, -height);
+                    this.eFields.push(fieldBelow);
+                }
+            }
+
+            createEFieldLine(wireLength, height) {
+                const points = [];
+                const curvePattern = [];
+                
+                for (let t = 0; t <= 1; t += 0.1) {
+                    const x = (t - 0.5) * wireLength;
+                    const y = 0; // Start flat against antenna
+                    points.push(new THREE.Vector3(x, y, 0));
+                    curvePattern.push(height * Math.sin(Math.PI * t));
+                }
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: 0xff3366, 
+                    transparent: true, 
+                    opacity: CONFIG.RENDERING.FIELD_OPACITY
+                });
+                const field = new THREE.Line(geometry, material);
+                
+                field.userData = {
+                    fieldType: 'eField',
+                    baseOpacity: CONFIG.RENDERING.FIELD_OPACITY,
+                    maxHeight: height,
+                    curvePattern: curvePattern
+                };
+                
+                this.scene3D.scene.add(field);
+                return field;
+            }
+
+            createHFields(wireLength) {
+                // Create H-field rings (cyan/blue) - perpendicular to antenna
+                for (let i = 0; i < 7; i++) {
+                    const x = (i / 6 - 0.5) * wireLength * 0.9;
+                    const baseRadius = 0.5 + i * 0.1;
+                    
+                    const geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.3, CONFIG.RENDERING.RING_SEGMENTS);
+                    const material = new THREE.MeshBasicMaterial({ 
+                        color: 0x00aaff, 
+                        transparent: true, 
+                        opacity: 0.4, 
+                        side: THREE.DoubleSide 
+                    });
+                    const field = new THREE.Mesh(geometry, material);
+                    
+                    field.position.set(x, 0, 0);
+                    field.rotation.y = Math.PI / 2; // Perpendicular to antenna
+                    
+                    field.userData = {
+                        fieldType: 'hField',
+                        baseOpacity: 0.4,
+                        baseRadius: baseRadius,
+                        maxRadius: baseRadius + 1.0 + i * 0.2,
+                        positionFactor: Math.abs(i / 6 - 0.5) * 2
+                    };
+                    
+                    this.hFields.push(field);
+                    this.scene3D.scene.add(field);
+                }
+            }
+
+            clear() {
+                // Clear curves
+                if (this.currentCurve && this.scene3D.scene) { 
+                    this.scene3D.scene.remove(this.currentCurve); 
+                    this.currentCurve = null; 
+                }
+                if (this.voltageCurve && this.scene3D.scene) { 
+                    this.scene3D.scene.remove(this.voltageCurve); 
+                    this.voltageCurve = null; 
+                }
+                
+                // Clear E-fields
+                this.eFields.forEach(field => this.scene3D.scene.remove(field));
+                this.eFields = [];
+                
+                // Clear H-fields
+                this.hFields.forEach(field => this.scene3D.scene.remove(field));
+                this.hFields = [];
+            }
+
+            setVisibility(visibility) {
+                if (this.currentCurve) this.currentCurve.visible = visibility.current;
+                if (this.voltageCurve) this.voltageCurve.visible = visibility.voltage;
+                
+                this.eFields.forEach(field => field.visible = visibility.fields);
+                this.hFields.forEach(field => field.visible = visibility.fields);
+            }
+
+            getAllFields() {
+                return [...this.eFields, ...this.hFields];
+            }
+
+            getCurves() {
+                return {
+                    current: this.currentCurve,
+                    voltage: this.voltageCurve
+                };
+            }
+        }
+
+        // 5. ANIMATION CONTROLLER - Temporal animation of fields
+        class AnimationController {
+            constructor(fieldRenderer) {
+                this.fieldRenderer = fieldRenderer;
+                this.advancedFieldsEnabled = true;
+            }
+
+            updateAnimation(time, isPlaying, model) {
+                if (!isPlaying) return;
+                
+                // Get phase relationship from physics engine
+                const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
+                const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
+                
+                // Animate current and voltage curves
+                const curves = this.fieldRenderer.getCurves();
+                if (curves.current && curves.current.userData.amplitudes) {
+                    this.updateCurve(curves.current, time, 0); // Current reference phase
+                }
+                if (curves.voltage && curves.voltage.userData.amplitudes) {
+                    this.updateCurve(curves.voltage, time, phaseAngle); // Voltage phase based on impedance
+                }
+                
+                // Animate electromagnetic fields
+                if (this.advancedFieldsEnabled) {
+                    this.updateAdvancedFieldAnimation(time, phaseAngle, model);
+                } else {
+                    this.updateSimpleFieldAnimation(time, phaseAngle, model);
+                }
+            }
+
+            updateCurve(curve, time, phaseShift) {
+                if (!curve || !curve.geometry || !curve.geometry.attributes.position) return;
+                
+                const positions = curve.geometry.attributes.position.array;
+                const amplitudes = curve.userData.amplitudes;
+                
+                if (amplitudes) {
+                    for (let i = 0; i < amplitudes.length; i++) {
+                        const amplitude = amplitudes[i];
+                        const animatedY = Math.sin(time + phaseShift) * amplitude;
+                        if (i * 3 + 1 < positions.length) {
+                            positions[i * 3 + 1] = animatedY;
+                        }
+                    }
+                    curve.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+
+            updateAdvancedFieldAnimation(time, phaseAngle, model) {
+                const k = model ? model.waveNumber : 1;
+                const allFields = this.fieldRenderer.getAllFields();
+                
+                allFields.forEach(field => {
+                    if (!field.material || field.material.opacity === undefined) return;
+                    
+                    const isEField = field.userData.fieldType === 'eField';
+                    
+                    if (isEField && field.userData.curvePattern) {
+                        this.animateEField(field, time, phaseAngle);
+                    } else if (!isEField && field.userData.maxRadius) {
+                        this.animateHField(field, time, k);
+                    }
+                });
+            }
+
+            animateEField(field, time, phaseAngle) {
+                const eFieldPhase = time + phaseAngle;
+                const fieldStrength = Math.abs(Math.sin(eFieldPhase));
+                const positions = field.geometry.attributes.position.array;
+                const curvePattern = field.userData.curvePattern;
+                
+                // Update Y positions based on field strength and stored curve pattern
+                for (let i = 0; i < curvePattern.length && i * 3 + 1 < positions.length; i++) {
+                    positions[i * 3 + 1] = curvePattern[i] * fieldStrength;
+                }
+                
+                field.geometry.attributes.position.needsUpdate = true;
+                field.material.opacity = Math.max(0.2, fieldStrength * field.userData.baseOpacity);
+            }
+
+            animateHField(field, time, k) {
+                const position = field.position.x;
+                const distanceFromCenter = Math.abs(position);
+                
+                // Propagation delay
+                const propagationDelay = k * distanceFromCenter;
+                const totalPhase = time - propagationDelay;
+                
+                // Current distribution along antenna
+                const positionFactor = field.userData.positionFactor || 0;
+                const currentDistribution = Math.cos(positionFactor * Math.PI / 2);
+                
+                const fieldValue = Math.sin(totalPhase) * currentDistribution;
+                const fieldStrength = Math.max(0.1, Math.abs(fieldValue));
+                
+                // Update ring geometry
+                const baseRadius = field.userData.baseRadius;
+                const maxRadius = field.userData.maxRadius;
+                const currentOuterRadius = baseRadius + (maxRadius - baseRadius) * fieldStrength;
+                
+                if (field.geometry) {
+                    field.geometry.dispose();
+                }
+                field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+                
+                field.material.opacity = Math.max(0.1, Math.min(0.7, fieldStrength * field.userData.baseOpacity));
+            }
+
+            updateSimpleFieldAnimation(time, phaseAngle, model) {
+                const allFields = this.fieldRenderer.getAllFields();
+                
+                allFields.forEach(field => {
+                    if (!field.material || field.material.opacity === undefined) return;
+                    
+                    const isEField = field.userData.fieldType === 'eField';
+                    
+                    if (isEField) {
+                        const eFieldPhase = time + phaseAngle;
+                        field.material.opacity = field.userData.baseOpacity * (0.4 + Math.abs(Math.sin(eFieldPhase)) * 0.4);
+                    } else {
+                        // H-field with propagation delay and simplified animation
+                        const position = field.position.x;
+                        const distanceFromCenter = Math.abs(position);
+                        const propagationDelay = (model ? model.waveNumber : 1) * distanceFromCenter;
+                        const delayedTime = time - propagationDelay;
+                        
+                        let fieldStrength = 0.4 + Math.abs(Math.sin(delayedTime)) * 0.4;
+                        
+                        if (field.userData.positionFactor !== undefined) {
+                            const currentDistribution = Math.cos(field.userData.positionFactor * Math.PI / 2);
+                            fieldStrength *= currentDistribution;
+                            
+                            // Update ring size
+                            if (field.userData.baseRadius) {
+                                const baseRadius = field.userData.baseRadius;
+                                const maxRadius = field.userData.maxRadius;
+                                const currentOuterRadius = baseRadius + (maxRadius - baseRadius) * fieldStrength;
+                                
+                                if (field.geometry) {
+                                    field.geometry.dispose();
+                                }
+                                field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+                            }
+                        }
+                        
+                        field.material.opacity = field.userData.baseOpacity * fieldStrength;
+                    }
+                });
+            }
+
+            resetAnimation(model) {
+                // Calculate the correct phase for reset position
+                const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
+                const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
+                
+                // Reset curves to starting positions
+                const curves = this.fieldRenderer.getCurves();
+                if (curves.current && curves.current.userData.amplitudes) {
+                    this.updateCurve(curves.current, 0, 0);
+                }
+                if (curves.voltage && curves.voltage.userData.amplitudes) {
+                    this.updateCurve(curves.voltage, 0, phaseAngle);
+                }
+                
+                // Reset field opacity and ring sizes to minimal state
+                const allFields = this.fieldRenderer.getAllFields();
+                allFields.forEach(field => {
+                    if (field.material && field.material.opacity !== undefined) {
+                        field.material.opacity = field.userData.baseOpacity * 0.2;
+                        
+                        // Reset H-field rings to minimum size
+                        if (field.userData.fieldType === 'hField' && field.userData.baseRadius) {
+                            if (field.geometry) {
+                                field.geometry.dispose();
+                            }
+                            const baseRadius = field.userData.baseRadius;
+                            field.geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.05, CONFIG.RENDERING.RING_SEGMENTS);
+                        }
+                    }
+                });
+            }
+
+            setAdvancedFieldsEnabled(enabled) {
+                this.advancedFieldsEnabled = enabled;
+            }
+        }
+
+        // 6. PERFORMANCE MONITOR - FPS tracking and display
+        class PerformanceMonitor {
+            constructor(elementId) {
+                this.element = document.getElementById(elementId);
+                this.lastTime = performance.now();
+                this.frameCount = 0;
+                this.fps = 0;
+                this.fpsHistory = [];
+                this.maxHistory = 60;
+            }
+
+            update() {
+                const currentTime = performance.now();
+                const deltaTime = currentTime - this.lastTime;
+                
+                // Add current frame time to history
+                this.fpsHistory.push(deltaTime);
+                
+                // Keep only the last N frame times
+                if (this.fpsHistory.length > this.maxHistory) {
+                    this.fpsHistory.shift();
+                }
+                
+                // Calculate average FPS from recent frame times
+                if (this.fpsHistory.length > 5) {
+                    const avgFrameTime = this.fpsHistory.reduce((a, b) => a + b) / this.fpsHistory.length;
+                    this.fps = Math.round(1000 / avgFrameTime);
+                    
+                    if (this.element) {
+                        this.element.textContent = `FPS: ${this.fps}`;
+                        
+                        // Color code the FPS display
+                        if (this.fps >= 55) {
+                            this.element.style.color = '#00ff00'; // Green for good FPS
+                        } else if (this.fps >= 30) {
+                            this.element.style.color = '#ffaa00'; // Orange for medium FPS
+                        } else {
+                            this.element.style.color = '#ff3366'; // Red for low FPS
+                        }
+                    }
+                }
+                
+                this.lastTime = currentTime;
+            }
+
+            getFPS() {
+                return this.fps;
+            }
+        }
+
+        // =====================================================================
+        // MAIN 3D RENDERER (Simplified orchestrator)
+        // =====================================================================
+        
+        class ThreeDRenderer {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                this.model = null;
+                
+                try {
+                    // Initialize all components
+                    this.scene3D = new Scene3D(this.container);
+                    this.cameraController = new CameraController(this.scene3D);
+                    this.antennaRenderer = new AntennaRenderer(this.scene3D);
+                    this.fieldRenderer = new FieldRenderer(this.scene3D);
+                    this.animationController = new AnimationController(this.fieldRenderer);
+                    this.performanceMonitor = new PerformanceMonitor('fps-monitor');
+                    
+                } catch (error) {
+                    console.error('ThreeJS initialization failed:', error);
+                    this.handleInitializationError(error);
+                }
+            }
+
+            handleInitializationError(error) {
+                // Hide FPS monitor on error
+                const fpsElement = document.getElementById('fps-monitor');
+                if (fpsElement) {
+                    fpsElement.style.display = 'none';
+                }
+                
+                // Create fallback error display
+                this.container.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6666; text-align: center;">
+                        <div>
+                            <h3>3D Visualization Error</h3>
+                            <p>Unable to initialize WebGL renderer.</p>
+                            <p>Please check if your browser supports WebGL.</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            updateAntenna(model) {
+                this.model = model;
+                this.antennaRenderer.update(model);
+            }
+
+            updateFields(model) {
+                this.model = model;
+                this.fieldRenderer.update(model);
+            }
+
+            updateAnimation(time, isPlaying) {
+                this.animationController.updateAnimation(time, isPlaying, this.model);
+            }
+
+            resetAnimation() {
+                this.animationController.resetAnimation(this.model);
+                this.render();
+            }
+
+            updateVisibility(visibility) {
+                this.antennaRenderer.setVisibility(visibility.antenna);
+                this.fieldRenderer.setVisibility(visibility);
+                this.scene3D.axes.forEach(axis => axis.visible = true); // Always show axes
+                this.animationController.setAdvancedFieldsEnabled(visibility.advancedFields);
+            }
+
+            render() {
+                if (this.scene3D) {
+                    this.scene3D.render();
+                    this.performanceMonitor.update();
+                }
+            }
+
+            handleResize() {
+                if (this.scene3D) {
+                    this.scene3D.handleResize();
+                }
+            }
+
+            dispose() {
+                if (this.scene3D) {
+                    this.scene3D.dispose();
+                }
+            }
+        }
+
+        // =====================================================================
+        // USER INTERFACE, DISPLAY, AND APPLICATION CLASSES (Unchanged)
+        // =====================================================================
+        
+        class UIController {
+            constructor() {
+                this.visibility = {
+                    antenna: true,
+                    current: true,
+                    voltage: true,
+                    fields: true,
+                    advancedFields: true,
+                    debug: false
+                };
+                this.time = 0;
+                this.isPlaying = false;
+            }
+            
+            setupControls(model, callbacks) {
+                try {
+                    // Parameter controls
+                    const controls = [
+                        { prop: 'length', slider: 'lengthSlider', input: 'lengthInput', callbacks: ['updateAntenna', 'updateFields', 'updateDisplay'] },
+                        { prop: 'frequency', slider: 'freqSlider', input: 'freqInput', callbacks: ['updateFields', 'updateDisplay'] },
+                        { prop: 'feedPosition', slider: 'feedSlider', input: 'feedInput', transform: v => v/100, callbacks: ['updateAntenna', 'updateFields', 'updateDisplay'] },
+                        { prop: 'wireDiameter', slider: 'wireSlider', input: 'wireInput', callbacks: ['updateDisplay'] }
+                    ];
+                    
+                    controls.forEach(config => {
+                        const slider = document.getElementById(config.slider);
+                        const input = document.getElementById(config.input);
+                        
+                        if (!slider || !input) {
+                            console.warn(`Control elements not found: ${config.slider}, ${config.input}`);
+                            return;
+                        }
+                        
+                        const updateValue = (value) => {
+                            const transformedValue = config.transform ? config.transform(value) : value;
+                            model[config.prop] = transformedValue;
+                            config.callbacks.forEach(callback => {
+                                if (callbacks[callback]) {
+                                    callbacks[callback]();
+                                }
+                            });
+                        };
+                        
+                        slider.addEventListener('input', (e) => {
+                            const value = parseFloat(e.target.value);
+                            input.value = value;
+                            updateValue(value);
+                        });
+                        
+                        input.addEventListener('input', (e) => {
+                            const value = parseFloat(e.target.value);
+                            if (value >= parseFloat(input.min) && value <= parseFloat(input.max)) {
+                                slider.value = value;
+                                updateValue(value);
+                            }
+                        });
+                    });
+                    
+                    // Matching network controls
+                    const matchingNetworkIds = Object.keys(CONFIG.MATCHING_NETWORKS);
+                    const checkboxes = matchingNetworkIds.map(id => document.getElementById(id)).filter(Boolean);
+                    
+                    checkboxes.forEach((checkbox, index) => {
+                        const id = matchingNetworkIds[index];
+                        checkbox.addEventListener('change', (e) => {
+                            if (e.target.checked) {
+                                checkboxes.forEach((cb, i) => {
+                                    if (i !== index) cb.checked = false;
+                                });
+                                model.matchingNetwork = id;
+                            } else {
+                                model.matchingNetwork = null;
+                            }
+                            if (callbacks.updateDisplay) {
+                                callbacks.updateDisplay();
+                            }
+                        });
+                    });
+                    
+                    // Animation controls
+                    const playBtn = document.getElementById('playBtn');
+                    const pauseBtn = document.getElementById('pauseBtn');
+                    const resetBtn = document.getElementById('resetBtn');
+                    
+                    if (playBtn) {
+                        playBtn.addEventListener('click', () => {
+                            this.isPlaying = true;
+                            playBtn.disabled = true;
+                            if (pauseBtn) pauseBtn.disabled = false;
+                        });
+                    }
+                    
+                    if (pauseBtn) {
+                        pauseBtn.addEventListener('click', () => {
+                            this.isPlaying = false;
+                            if (playBtn) playBtn.disabled = false;
+                            pauseBtn.disabled = true;
+                        });
+                    }
+                    
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', () => {
+                            this.isPlaying = false;
+                            this.time = 0;
+                            if (playBtn) playBtn.disabled = false;
+                            if (pauseBtn) pauseBtn.disabled = true;
+                            const timeDisplay = document.getElementById('timeDisplay');
+                            if (timeDisplay) timeDisplay.textContent = 'Time: 0°';
+                            
+                            // Update phase display
+                            const phaseDisplay = document.getElementById('phaseAngle');
+                            if (phaseDisplay && callbacks.model) {
+                                const impedance = callbacks.model.calculateImpedance();
+                                const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
+                                const phaseDegrees = Math.round(phaseAngle * 180 / Math.PI);
+                                phaseDisplay.textContent = `${phaseDegrees}°`;
+                            }
+                            
+                            if (callbacks.resetAnimation) {
+                                callbacks.resetAnimation();
+                            }
+                        });
+                    }
+                    
+                    // Visibility controls
+                    const visibilityControls = [
+                        { id: 'showAntenna', prop: 'antenna' },
+                        { id: 'showCurrent', prop: 'current' },
+                        { id: 'showVoltage', prop: 'voltage' },
+                        { id: 'showFields', prop: 'fields' },
+                        { id: 'showAdvancedFields', prop: 'advancedFields' },
+                        { id: 'showDebug', prop: 'debug' }
+                    ];
+                    
+                    visibilityControls.forEach(({ id, prop }) => {
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) {
+                            checkbox.addEventListener('change', (e) => {
+                                this.visibility[prop] = e.target.checked;
+                                if (callbacks.updateVisibility) {
+                                    callbacks.updateVisibility();
+                                }
+                            });
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error setting up controls:', error);
+                }
+            }
+            
+            updateAnimation(model) {
+                if (this.isPlaying) {
+                    this.time += 0.05;
+                    const degrees = Math.round((this.time * 180 / Math.PI) % 360);
+                    const timeDisplay = document.getElementById('timeDisplay');
+                    if (timeDisplay) {
+                        timeDisplay.textContent = `Time: ${degrees}°`;
+                    }
+                    
+                    // Update phase display in real-time
+                    const phaseDisplay = document.getElementById('phaseAngle');
+                    if (phaseDisplay && model) {
+                        const impedance = model.calculateImpedance();
+                        const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
+                        const phaseDegrees = Math.round(phaseAngle * 180 / Math.PI);
+                        phaseDisplay.textContent = `${phaseDegrees}°`;
+                    }
+                }
+                return { time: this.time, isPlaying: this.isPlaying };
+            }
+        }
+
+        class DisplayManager {
+            constructor() {
+                this.elements = new Map();
+                this._cacheElements();
+            }
+            
+            _cacheElements() {
+                const ids = [
+                    'currentLength', 'currentFreq', 'currentWavelength', 
+                    'currentElectricalLength', 'currentWireDia', 'feedPositionDisplay',
+                    'antennaImpedanceDisplay', 'impedanceDisplay', 'matchingTypeDisplay',
+                    'swrDisplay', 'qualityDisplay', 'antennaType', 'debugContent'
+                ];
+                
+                ids.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) this.elements.set(id, element);
+                });
+            }
+            
+            _updateElement(id, value) {
+                const element = this.elements.get(id);
+                if (element && element.textContent !== value) {
+                    element.textContent = value;
+                }
+            }
+            
+            updateAll(model) {
+                try {
+                    this.updateBasicParameters(model);
+                    this.updateFeedPosition(model);
+                    this.updateImpedanceAnalysis(model);
+                    this.updateDebugInfo(model);
+                    this.updatePhaseDisplay(model);
+                } catch (error) {
+                    console.error('Error updating display:', error);
+                }
+            }
+            
+            updateBasicParameters(model) {
+                this._updateElement('currentLength', `${model.length.toFixed(1)}m`);
+                this._updateElement('currentFreq', `${model.frequency.toFixed(2)} MHz`);
+                this._updateElement('currentWavelength', `${model.wavelength.toFixed(1)}m`);
+                this._updateElement('currentElectricalLength', `${model.electricalLength.toFixed(3)}λ`);
+                this._updateElement('currentWireDia', `${model.wireDiameter.toFixed(1)}mm`);
+            }
+            
+            updateFeedPosition(model) {
+                const percentage = Math.round(model.feedPosition * 100);
+                const descriptions = {
+                    0: 'Left End Fed (0%)',
+                    50: 'Center Fed (50%)',
+                    100: 'Right End Fed (100%)'
+                };
+                
+                const description = descriptions[percentage] || `Off-Center Fed (${percentage}%)`;
+                this._updateElement('feedPositionDisplay', description);
+            }
+            
+            updateImpedanceAnalysis(model) {
+                const antennaImpedance = model.calculateImpedance();
+                const matchingResult = model.applyMatching(antennaImpedance);
+                const systemImpedance = matchingResult.impedance;
+                
+                this._updateElement('antennaImpedanceDisplay', 
+                    PhysicsUtils.formatImpedance(antennaImpedance.resistance, antennaImpedance.reactance));
+                this._updateElement('impedanceDisplay', 
+                    PhysicsUtils.formatImpedance(systemImpedance.resistance, systemImpedance.reactance));
+                this._updateElement('matchingTypeDisplay', matchingResult.matchingType);
+                
+                const swr = PhysicsUtils.calculateSWR(systemImpedance.resistance, systemImpedance.reactance);
+                const swrCapped = PhysicsUtils.clamp(swr, 1.0, 999);
+                const swrDisplayValue = `${swrCapped.toFixed(1)}:1`;
+                this._updateElement('swrDisplay', swrDisplayValue);
+                
+                const displayedSWR = parseFloat(swrDisplayValue.split(':')[0]);
+                const quality = this._getMatchQuality(displayedSWR);
+                const qualityElement = this.elements.get('qualityDisplay');
+                if (qualityElement) {
+                    qualityElement.textContent = quality.text;
+                    qualityElement.style.color = quality.color;
+                }
+                
+                this._updateElement('antennaType', model.getAntennaType());
+            }
+
+            updatePhaseDisplay(model) {
+                const phaseAngleElement = document.getElementById('phaseAngle');
+                if (phaseAngleElement) {
+                    const impedance = model.calculateImpedance();
+                    const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
+                    const phaseDegrees = Math.round(phaseAngle * 180 / Math.PI);
+                    phaseAngleElement.textContent = `${phaseDegrees}°`;
+                }
+            }
+            
+            _getMatchQuality(swr) {
+                if (swr <= 1.2) return { text: "Excellent", color: '#00ff00' };
+                if (swr <= 1.5) return { text: "Very Good", color: '#88ff00' };
+                if (swr <= 2.0) return { text: "Good", color: '#ffaa00' };
+                if (swr <= 2.5) return { text: "Acceptable", color: '#ffaa00' };
+                if (swr <= 3.0) return { text: "Fair - Tuner Helpful", color: '#ff6600' };
+                if (swr <= 5.0) return { text: "Poor - Tuner Needed", color: '#ff6600' };
+                if (swr <= 10.0) return { text: "Bad - Matching Required", color: '#ff3366' };
+                return { text: "Very Poor - Major Mismatch", color: '#ff3366' };
+            }
+            
+            updateDebugInfo(model) {
+                const debugContent = this.elements.get('debugContent');
+                if (!debugContent) return;
+                
+                const impedance = model.calculateImpedance();
+                const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
+                const cacheStats = model.physics.getCacheStats();
+                
+                const debugData = [
+                    ['Wavelength', `${model.wavelength.toFixed(2)}m`],
+                    ['Electrical Length', `${model.electricalLength.toFixed(4)}λ`],
+                    ['Wave Number (k)', `${model.waveNumber.toFixed(4)} rad`],
+                    ['Wire Radius', `${(model.wireDiameter/2).toFixed(2)}mm`],
+                    ['Length/Radius Ratio', `${model.lengthToRadiusRatio.toFixed(0)}`],
+                    ['Feed Position', `${(model.feedPosition * 100).toFixed(1)}%`],
+                    ['Antenna Type', model.getAntennaType()],
+                    ['Calculated R', `${impedance.resistance.toFixed(2)}Ω`],
+                    ['Calculated X', `${impedance.reactance >= 0 ? '+' : ''}${impedance.reactance.toFixed(2)}Ω`],
+                    ['Z Magnitude', `${PhysicsUtils.calculateImpedanceMagnitude(impedance.resistance, impedance.reactance).toFixed(1)}Ω`],
+                    ['I-V Phase Angle', `${(phaseAngle * 180 / Math.PI).toFixed(1)}°`],
+                    ['Resonant?', `${Math.abs(impedance.reactance) < 15 ? 'Yes' : 'No'}`],
+                    ['Physics Cache (Z)', `${cacheStats.impedanceCacheSize} entries`],
+                    ['Physics Cache (Dist)', `${cacheStats.distributionCacheSize} entries`]
+                ];
+                
+                debugContent.innerHTML = debugData
+                    .map(([label, value]) => `<div>${label}: <span class="debug-value">${value}</span></div>`)
+                    .join('');
+            }
+            
+            updateVisibility(visibility) {
+                const debugPanel = document.getElementById('debugPanel');
+                if (debugPanel) {
+                    debugPanel.style.display = visibility.debug ? 'block' : 'none';
+                }
+            }
+        }
+
+        class AntennaVisualizationApp {
+            constructor() {
+                this.model = new AntennaModel();
+                this.renderer = new ThreeDRenderer('canvas-container');
+                this.ui = new UIController();
+                this.display = new DisplayManager();
+                this.animationId = null;
+                
+                this.init();
+            }
+            
+            init() {
+                try {
+                    const callbacks = {
+                        updateAntenna: () => this.renderer.updateAntenna(this.model),
+                        updateFields: () => this.renderer.updateFields(this.model),
+                        updateDisplay: () => this.display.updateAll(this.model),
+                        updateVisibility: () => {
+                            this.renderer.updateVisibility(this.ui.visibility);
+                            this.display.updateVisibility(this.ui.visibility);
+                        },
+                        resetAnimation: () => this.renderer.resetAnimation(),
+                        model: this.model
+                    };
+                    
+                    this.ui.setupControls(this.model, callbacks);
+                    this.renderer.updateAntenna(this.model);
+                    this.renderer.updateFields(this.model);
+                    this.display.updateAll(this.model);
+                    
+                    this.animate();
+                    
+                    window.addEventListener('resize', () => this.renderer.handleResize());
+                    
+                    console.log('Advanced antenna visualization initialized successfully');
+                    console.log('Physics engine stats:', this.model.physics.getCacheStats());
+                } catch (error) {
+                    console.error('Initialization failed:', error);
+                    const container = document.querySelector('.container');
+                    if (container) {
+                        container.innerHTML = `
+                            <div style="text-align: center; padding: 50px; color: #ff6666;">
+                                <h2>Initialization Error</h2>
+                                <p>The antenna visualization failed to initialize.</p>
+                                <p>Please refresh the page and try again.</p>
+                                <p>Error: ${error.message}</p>
+                            </div>
+                        `;
+                    }
+                }
+            }
+            
+            animate() {
+                try {
+                    const animationState = this.ui.updateAnimation(this.model);
+                    this.renderer.updateAnimation(animationState.time, animationState.isPlaying);
+                    this.renderer.render();
+                    this.animationId = requestAnimationFrame(() => this.animate());
+                } catch (error) {
+                    console.error('Animation error:', error);
+                    this.animationId = requestAnimationFrame(() => this.animate());
+                }
+            }
+            
+            destroy() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                    this.animationId = null;
+                }
+                
+                if (this.renderer) {
+                    this.renderer.dispose();
+                }
+            }
+        }
+
+        // =====================================================================
+        // APPLICATION STARTUP (Unchanged)
+        // =====================================================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                
+                if (!gl) {
+                    throw new Error('WebGL is not supported in this browser');
+                }
+                
+                if (typeof THREE === 'undefined') {
+                    throw new Error('Three.js library failed to load');
+                }
+                
+                new AntennaVisualizationApp();
+            } catch (error) {
+                console.error('Application startup failed:', error);
+                
+                const container = document.querySelector('.container');
+                if (container) {
+                    const canvasContainer = document.getElementById('canvas-container');
+                    if (canvasContainer) {
+                        canvasContainer.innerHTML = `
+                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6666; text-align: center; flex-direction: column;">
+                                <h3>3D Visualization Unavailable</h3>
+                                <p>Error: ${error.message}</p>
+                                <p>The controls and calculations still work below.</p>
+                            </div>
+                        `;
+                    }
+                    
+                    try {
+                        const model = new AntennaModel();
+                        const display = new DisplayManager();
+                        const ui = new UIController();
+                        
+                        const callbacks = {
+                            updateAntenna: () => console.log('3D disabled - antenna update skipped'),
+                            updateFields: () => console.log('3D disabled - fields update skipped'),
+                            updateDisplay: () => display.updateAll(model),
+                            updateVisibility: () => display.updateVisibility(ui.visibility),
+                            resetAnimation: () => console.log('3D disabled - animation reset skipped'),
+                            model: model
+                        };
+                        
+                        ui.setupControls(model, callbacks);
+                        display.updateAll(model);
+                        
+                        console.log('Fallback mode initialized - calculations working without 3D');
+                    } catch (fallbackError) {
+                        console.error('Even fallback mode failed:', fallbackError);
+                    }
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
