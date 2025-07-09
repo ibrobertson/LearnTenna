@@ -12,7 +12,7 @@ Interactive 3D visualization of antenna physics including current/voltage distri
 
 ## Live Demo
 
-🚀 **[View Live Demo](https://yourusername.github.io/antenna-visualization)**
+🚀 **[View Live Demo](https://ibrobertson.github.io/LearnTenna)**
 
 ## Usage
 
