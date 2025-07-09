@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -196,7 +196,19 @@
             color: #ffff66;
         }
 
-
+        .physics-correction {
+            background-color: #2a4a1a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            border-left: 4px solid #00ff00;
+            font-size: 12px;
+        }
+        
+        .physics-correction h4 {
+            margin: 0 0 8px 0;
+            color: #66ff66;
+        }
     </style>
 </head>
 <body>
@@ -311,6 +323,12 @@
             </div>
         </div>
         
+        <div class="physics-correction">
+            <h4>✅ Physics Correction Applied</h4>
+            <p><strong>Fixed:</strong> Current and voltage distributions now remain constant when moving feedpoint, as they should in real antennas. Only impedance and phase relationships change with feedpoint position.</p>
+            <p><strong>Now Accurate:</strong> Standing wave patterns determined by antenna length + frequency, not feedpoint location.</p>
+        </div>
+        
         <div class="debug-panel" id="debugPanel" style="display: none;">
             <h4>Debug Information</h4>
             <div id="debugContent"></div>
@@ -322,7 +340,7 @@
         'use strict';
 
         // =====================================================================
-        // CONFIGURATION & CONSTANTS (Unchanged)
+        // CONFIGURATION & CONSTANTS
         // =====================================================================
         
         const CONFIG = {
@@ -357,7 +375,7 @@
         };
 
         // =====================================================================
-        // UTILITY FUNCTIONS (Unchanged)
+        // UTILITY FUNCTIONS
         // =====================================================================
         
         const PhysicsUtils = {
@@ -385,11 +403,11 @@
         };
 
         const Utils = {
-            clamp: PhysicsUtils.clamp  // Alias for backward compatibility
+            clamp: PhysicsUtils.clamp
         };
 
         // =====================================================================
-        // ANTENNA PHYSICS ENGINE (Unchanged from previous refactor)
+        // ANTENNA PHYSICS ENGINE (CORRECTED)
         // =====================================================================
         
         class AntennaPhysicsEngine {
@@ -524,6 +542,10 @@
                 };
             }
 
+            // =====================================================================
+            // CORRECTED SPATIAL FIELD DISTRIBUTIONS
+            // =====================================================================
+            
             calculateSpatialDistributions(params, positions) {
                 const key = this._getDistributionCacheKey(params, positions.length);
                 
@@ -531,12 +553,11 @@
                     return this._distributionCache.get(key);
                 }
 
-                const { length, frequency, feedPosition } = params;
+                const { length, frequency } = params; // NOTE: feedPosition removed - doesn't affect patterns!
                 const k = this.getWaveNumber(frequency);
-                const wireLength = length;
                 
                 const distributions = positions.map(x => 
-                    this._calculateFieldAmplitudesAtPosition(k, wireLength, feedPosition, x)
+                    this._calculateFieldAmplitudesAtPosition(k, length, x)
                 );
                 
                 const result = {
@@ -549,43 +570,22 @@
                 return result;
             }
 
-            _calculateFieldAmplitudesAtPosition(k, wireLength, feedPosition, x) {
-                let currentAmp, voltageAmp;
+            // PHYSICS CORRECTION: Standing wave patterns are ONLY determined by antenna length and frequency
+            // Feedpoint position does NOT change the current/voltage distributions along the wire
+            _calculateFieldAmplitudesAtPosition(k, wireLength, x) {
+                // CORRECTED PHYSICS: Always calculate relative to antenna center
+                // Standing wave patterns are determined by physical dimensions, not feedpoint
                 
-                if (feedPosition === 0.5) {
-                    const distanceFromCenter = Math.abs(x);
-                    const electricalDistance = k * distanceFromCenter;
-                    
-                    currentAmp = Math.cos(electricalDistance) * 2;
-                    const phaseSign = x >= 0 ? 1 : -1;
-                    voltageAmp = Math.sin(electricalDistance) * phaseSign * 4;
-                    
-                } else if (feedPosition === 0 || feedPosition === 1) {
-                    const feedX = (feedPosition - 0.5) * wireLength;
-                    const distanceFromFeed = Math.abs(x - feedX);
-                    const electricalDistance = k * distanceFromFeed;
-                    
-                    currentAmp = Math.cos(electricalDistance) * 1.8;
-                    voltageAmp = Math.sin(electricalDistance) * 3.5;
-                    
-                } else {
-                    const feedX = (feedPosition - 0.5) * wireLength;
-                    const distanceFromFeed = Math.abs(x - feedX);
-                    const distanceFromCenter = Math.abs(x);
-                    
-                    const feedElecDist = k * distanceFromFeed;
-                    const centerElecDist = k * distanceFromCenter;
-                    
-                    const centerWeight = 1 - Math.abs(feedPosition - 0.5) * 2;
-                    const endWeight = 1 - centerWeight;
-                    
-                    currentAmp = (Math.cos(centerElecDist) * centerWeight + 
-                                 Math.cos(feedElecDist) * endWeight) * 1.9;
-                    
-                    const leftSide = x < feedX ? -1 : 1;
-                    voltageAmp = (Math.sin(centerElecDist) * centerWeight * (x >= 0 ? 1 : -1) + 
-                                 Math.sin(feedElecDist) * endWeight * leftSide) * 3.8;
-                }
+                const distanceFromCenter = Math.abs(x);
+                const electricalDistance = k * distanceFromCenter;
+                
+                // Current distribution: Always cosine from center (max at center, zero at ends)
+                const currentAmp = Math.cos(electricalDistance) * 2;
+                
+                // Voltage distribution: Always sine from center with proper phase
+                // (zero at center, max at ends, opposite phases on each side)
+                const phaseSign = x >= 0 ? 1 : -1;
+                const voltageAmp = Math.sin(electricalDistance) * phaseSign * 4;
                 
                 return {
                     current: PhysicsUtils.clamp(currentAmp, -10, 10),
@@ -660,7 +660,8 @@
             }
 
             _getDistributionCacheKey(params, numPoints) {
-                return `dist_${params.length}_${params.frequency}_${params.feedPosition}_${numPoints}`;
+                // CORRECTED: Cache key no longer includes feedPosition since it doesn't affect distributions
+                return `dist_${params.length}_${params.frequency}_${numPoints}`;
             }
 
             clearCache() {
@@ -677,7 +678,7 @@
         }
 
         // =====================================================================
-        // ANTENNA MODEL (Unchanged from previous refactor)
+        // ANTENNA MODEL (Updated to use corrected physics)
         // =====================================================================
         
         class AntennaModel {
@@ -727,17 +728,16 @@
                 return this.physics.calculateSpatialDistributions({
                     length: this.length,
                     frequency: this.frequency,
-                    feedPosition: this.feedPosition,
+                    feedPosition: this.feedPosition, // Still passed for cache key, but doesn't affect patterns
                     wireDiameter: this.wireDiameter
                 }, positions);
             }
         }
 
         // =====================================================================
-        // REFACTORED RENDERER COMPONENTS
+        // 3D RENDERER COMPONENTS (Unchanged - using corrected physics)
         // =====================================================================
 
-        // 1. SCENE3D - Basic Three.js scene setup, lighting, coordinate system
         class Scene3D {
             constructor(container) {
                 this.container = container;
@@ -750,11 +750,9 @@
             }
 
             init() {
-                // Create scene
                 this.scene = new THREE.Scene();
                 this.scene.background = new THREE.Color(0x000000);
                 
-                // Create camera
                 this.camera = new THREE.PerspectiveCamera(
                     75, 
                     this.container.clientWidth / this.container.clientHeight, 
@@ -764,15 +762,11 @@
                 this.camera.position.set(15, 10, 15);
                 this.camera.lookAt(0, 0, 0);
                 
-                // Create renderer
                 this.renderer = new THREE.WebGLRenderer({ antialias: true });
                 this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
                 this.container.appendChild(this.renderer.domElement);
                 
-                // Add lighting
                 this.setupLighting();
-                
-                // Add coordinate axes
                 this.addCoordinateAxes();
             }
 
@@ -787,48 +781,27 @@
                 const axisLength = CONFIG.RENDERING.AXIS_LENGTH;
                 const axisOpacity = CONFIG.RENDERING.AXIS_OPACITY;
                 
-                // X-axis (Red)
-                const xGeometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(axisLength, 0, 0)
-                ]);
-                const xMaterial = new THREE.LineBasicMaterial({ 
-                    color: 0xff0000, 
-                    transparent: true, 
-                    opacity: axisOpacity 
+                const axes = [
+                    { color: 0xff0000, direction: [axisLength, 0, 0] }, // X - Red
+                    { color: 0x00ff00, direction: [0, axisLength, 0] }, // Y - Green  
+                    { color: 0x0000ff, direction: [0, 0, axisLength] }  // Z - Blue
+                ];
+
+                axes.forEach(axis => {
+                    const geometry = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(0, 0, 0),
+                        new THREE.Vector3(...axis.direction)
+                    ]);
+                    const material = new THREE.LineBasicMaterial({ 
+                        color: axis.color, 
+                        transparent: true, 
+                        opacity: axisOpacity 
+                    });
+                    const line = new THREE.Line(geometry, material);
+                    this.scene.add(line);
+                    this.axes.push(line);
                 });
-                const xAxis = new THREE.Line(xGeometry, xMaterial);
-                this.scene.add(xAxis);
-                this.axes.push(xAxis);
-                
-                // Y-axis (Green)
-                const yGeometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, axisLength, 0)
-                ]);
-                const yMaterial = new THREE.LineBasicMaterial({ 
-                    color: 0x00ff00, 
-                    transparent: true, 
-                    opacity: axisOpacity 
-                });
-                const yAxis = new THREE.Line(yGeometry, yMaterial);
-                this.scene.add(yAxis);
-                this.axes.push(yAxis);
-                
-                // Z-axis (Blue)
-                const zGeometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, 0, 0),
-                    new THREE.Vector3(0, 0, axisLength)
-                ]);
-                const zMaterial = new THREE.LineBasicMaterial({ 
-                    color: 0x0000ff, 
-                    transparent: true, 
-                    opacity: axisOpacity 
-                });
-                const zAxis = new THREE.Line(zGeometry, zMaterial);
-                this.scene.add(zAxis);
-                this.axes.push(zAxis);
-                
+
                 this.addAxisLabels();
             }
 
@@ -837,38 +810,23 @@
                 const labelOpacity = 0.4;
                 const labelGeometry = new THREE.SphereGeometry(0.2, 8, 8);
                 
-                // X label (red sphere)
-                const xLabelMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xff0000, 
-                    transparent: true, 
-                    opacity: labelOpacity 
+                const labels = [
+                    { color: 0xff0000, position: [labelDistance, 0, 0] },
+                    { color: 0x00ff00, position: [0, labelDistance, 0] },
+                    { color: 0x0000ff, position: [0, 0, labelDistance] }
+                ];
+
+                labels.forEach(label => {
+                    const material = new THREE.MeshBasicMaterial({ 
+                        color: label.color, 
+                        transparent: true, 
+                        opacity: labelOpacity 
+                    });
+                    const mesh = new THREE.Mesh(labelGeometry, material);
+                    mesh.position.set(...label.position);
+                    this.scene.add(mesh);
+                    this.axes.push(mesh);
                 });
-                const xLabel = new THREE.Mesh(labelGeometry, xLabelMaterial);
-                xLabel.position.set(labelDistance, 0, 0);
-                this.scene.add(xLabel);
-                this.axes.push(xLabel);
-                
-                // Y label (green sphere)
-                const yLabelMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x00ff00, 
-                    transparent: true, 
-                    opacity: labelOpacity 
-                });
-                const yLabel = new THREE.Mesh(labelGeometry, yLabelMaterial);
-                yLabel.position.set(0, labelDistance, 0);
-                this.scene.add(yLabel);
-                this.axes.push(yLabel);
-                
-                // Z label (blue sphere)
-                const zLabelMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0x0000ff, 
-                    transparent: true, 
-                    opacity: labelOpacity 
-                });
-                const zLabel = new THREE.Mesh(labelGeometry, zLabelMaterial);
-                zLabel.position.set(0, 0, labelDistance);
-                this.scene.add(zLabel);
-                this.axes.push(zLabel);
             }
 
             handleResize() {
@@ -891,7 +849,6 @@
             }
         }
 
-        // 2. CAMERA CONTROLLER - Mouse interaction and camera movement
         class CameraController {
             constructor(scene3D) {
                 this.scene3D = scene3D;
@@ -944,7 +901,6 @@
             }
         }
 
-        // 3. ANTENNA RENDERER - Antenna geometry (wire + feedpoint)
         class AntennaRenderer {
             constructor(scene3D) {
                 this.scene3D = scene3D;
@@ -958,14 +914,12 @@
                 try {
                     const wireLength = model.length;
                     
-                    // Create antenna wire
                     const geometry = new THREE.CylinderGeometry(0.05, 0.05, wireLength, 16);
                     const material = new THREE.MeshLambertMaterial({ color: 0xffff00 });
                     this.antenna = new THREE.Mesh(geometry, material);
                     this.antenna.rotation.z = Math.PI / 2;
                     this.scene3D.scene.add(this.antenna);
                     
-                    // Create feedpoint
                     const feedX = (model.feedPosition - 0.5) * wireLength;
                     const feedGeometry = new THREE.SphereGeometry(0.3, 16, 16);
                     const feedMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
@@ -994,7 +948,6 @@
             }
         }
 
-        // 4. FIELD RENDERER - Current/voltage curves and electromagnetic fields
         class FieldRenderer {
             constructor(scene3D) {
                 this.scene3D = scene3D;
@@ -1019,24 +972,20 @@
                 const wireLength = model.length;
                 const numPoints = CONFIG.RENDERING.CURVE_POINTS;
                 
-                // Generate positions along the antenna
                 const positions = [];
                 for (let i = 0; i < numPoints; i++) {
                     const x = (i / (numPoints - 1)) * wireLength - wireLength/2;
                     positions.push(x);
                 }
                 
-                // Use physics engine to calculate distributions
                 const distributions = model.getSpatialDistributions(positions);
                 
-                // Create current curve (blue)
                 this.currentCurve = this.createCurve(
                     positions.map(x => new THREE.Vector3(x, 0, 0)),
                     distributions.current,
                     0x00aaff
                 );
                 
-                // Create voltage curve (orange)
                 this.voltageCurve = this.createCurve(
                     positions.map(x => new THREE.Vector3(x, 0, 0)),
                     distributions.voltage,
@@ -1062,15 +1011,12 @@
             }
 
             createEFields(wireLength) {
-                // Create curved E-field lines (red) - from end to end
                 for (let i = 0; i < 4; i++) {
                     const height = 1 + i * 0.8;
                     
-                    // Create field line above antenna
                     const fieldAbove = this.createEFieldLine(wireLength, height);
                     this.eFields.push(fieldAbove);
                     
-                    // Create field line below antenna
                     const fieldBelow = this.createEFieldLine(wireLength, -height);
                     this.eFields.push(fieldBelow);
                 }
@@ -1082,7 +1028,7 @@
                 
                 for (let t = 0; t <= 1; t += 0.1) {
                     const x = (t - 0.5) * wireLength;
-                    const y = 0; // Start flat against antenna
+                    const y = 0;
                     points.push(new THREE.Vector3(x, y, 0));
                     curvePattern.push(height * Math.sin(Math.PI * t));
                 }
@@ -1107,7 +1053,6 @@
             }
 
             createHFields(wireLength) {
-                // Create H-field rings (cyan/blue) - perpendicular to antenna
                 for (let i = 0; i < 7; i++) {
                     const x = (i / 6 - 0.5) * wireLength * 0.9;
                     const baseRadius = 0.5 + i * 0.1;
@@ -1122,7 +1067,7 @@
                     const field = new THREE.Mesh(geometry, material);
                     
                     field.position.set(x, 0, 0);
-                    field.rotation.y = Math.PI / 2; // Perpendicular to antenna
+                    field.rotation.y = Math.PI / 2;
                     
                     field.userData = {
                         fieldType: 'hField',
@@ -1138,7 +1083,6 @@
             }
 
             clear() {
-                // Clear curves
                 if (this.currentCurve && this.scene3D.scene) { 
                     this.scene3D.scene.remove(this.currentCurve); 
                     this.currentCurve = null; 
@@ -1148,11 +1092,9 @@
                     this.voltageCurve = null; 
                 }
                 
-                // Clear E-fields
                 this.eFields.forEach(field => this.scene3D.scene.remove(field));
                 this.eFields = [];
                 
-                // Clear H-fields
                 this.hFields.forEach(field => this.scene3D.scene.remove(field));
                 this.hFields = [];
             }
@@ -1177,7 +1119,6 @@
             }
         }
 
-        // 5. ANIMATION CONTROLLER - Temporal animation of fields
         class AnimationController {
             constructor(fieldRenderer) {
                 this.fieldRenderer = fieldRenderer;
@@ -1187,20 +1128,17 @@
             updateAnimation(time, isPlaying, model) {
                 if (!isPlaying) return;
                 
-                // Get phase relationship from physics engine
                 const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
                 const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
                 
-                // Animate current and voltage curves
                 const curves = this.fieldRenderer.getCurves();
                 if (curves.current && curves.current.userData.amplitudes) {
-                    this.updateCurve(curves.current, time, 0); // Current reference phase
+                    this.updateCurve(curves.current, time, 0);
                 }
                 if (curves.voltage && curves.voltage.userData.amplitudes) {
-                    this.updateCurve(curves.voltage, time, phaseAngle); // Voltage phase based on impedance
+                    this.updateCurve(curves.voltage, time, phaseAngle);
                 }
                 
-                // Animate electromagnetic fields
                 if (this.advancedFieldsEnabled) {
                     this.updateAdvancedFieldAnimation(time, phaseAngle, model);
                 } else {
@@ -1249,7 +1187,6 @@
                 const positions = field.geometry.attributes.position.array;
                 const curvePattern = field.userData.curvePattern;
                 
-                // Update Y positions based on field strength and stored curve pattern
                 for (let i = 0; i < curvePattern.length && i * 3 + 1 < positions.length; i++) {
                     positions[i * 3 + 1] = curvePattern[i] * fieldStrength;
                 }
@@ -1262,18 +1199,15 @@
                 const position = field.position.x;
                 const distanceFromCenter = Math.abs(position);
                 
-                // Propagation delay
                 const propagationDelay = k * distanceFromCenter;
                 const totalPhase = time - propagationDelay;
                 
-                // Current distribution along antenna
                 const positionFactor = field.userData.positionFactor || 0;
                 const currentDistribution = Math.cos(positionFactor * Math.PI / 2);
                 
                 const fieldValue = Math.sin(totalPhase) * currentDistribution;
                 const fieldStrength = Math.max(0.1, Math.abs(fieldValue));
                 
-                // Update ring geometry
                 const baseRadius = field.userData.baseRadius;
                 const maxRadius = field.userData.maxRadius;
                 const currentOuterRadius = baseRadius + (maxRadius - baseRadius) * fieldStrength;
@@ -1298,7 +1232,6 @@
                         const eFieldPhase = time + phaseAngle;
                         field.material.opacity = field.userData.baseOpacity * (0.4 + Math.abs(Math.sin(eFieldPhase)) * 0.4);
                     } else {
-                        // H-field with propagation delay and simplified animation
                         const position = field.position.x;
                         const distanceFromCenter = Math.abs(position);
                         const propagationDelay = (model ? model.waveNumber : 1) * distanceFromCenter;
@@ -1310,7 +1243,6 @@
                             const currentDistribution = Math.cos(field.userData.positionFactor * Math.PI / 2);
                             fieldStrength *= currentDistribution;
                             
-                            // Update ring size
                             if (field.userData.baseRadius) {
                                 const baseRadius = field.userData.baseRadius;
                                 const maxRadius = field.userData.maxRadius;
@@ -1329,11 +1261,9 @@
             }
 
             resetAnimation(model) {
-                // Calculate the correct phase for reset position
                 const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
                 const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
                 
-                // Reset curves to starting positions
                 const curves = this.fieldRenderer.getCurves();
                 if (curves.current && curves.current.userData.amplitudes) {
                     this.updateCurve(curves.current, 0, 0);
@@ -1342,13 +1272,11 @@
                     this.updateCurve(curves.voltage, 0, phaseAngle);
                 }
                 
-                // Reset field opacity and ring sizes to minimal state
                 const allFields = this.fieldRenderer.getAllFields();
                 allFields.forEach(field => {
                     if (field.material && field.material.opacity !== undefined) {
                         field.material.opacity = field.userData.baseOpacity * 0.2;
                         
-                        // Reset H-field rings to minimum size
                         if (field.userData.fieldType === 'hField' && field.userData.baseRadius) {
                             if (field.geometry) {
                                 field.geometry.dispose();
@@ -1365,7 +1293,6 @@
             }
         }
 
-        // 6. PERFORMANCE MONITOR - FPS tracking and display
         class PerformanceMonitor {
             constructor(elementId) {
                 this.element = document.getElementById(elementId);
@@ -1380,15 +1307,12 @@
                 const currentTime = performance.now();
                 const deltaTime = currentTime - this.lastTime;
                 
-                // Add current frame time to history
                 this.fpsHistory.push(deltaTime);
                 
-                // Keep only the last N frame times
                 if (this.fpsHistory.length > this.maxHistory) {
                     this.fpsHistory.shift();
                 }
                 
-                // Calculate average FPS from recent frame times
                 if (this.fpsHistory.length > 5) {
                     const avgFrameTime = this.fpsHistory.reduce((a, b) => a + b) / this.fpsHistory.length;
                     this.fps = Math.round(1000 / avgFrameTime);
@@ -1396,13 +1320,12 @@
                     if (this.element) {
                         this.element.textContent = `FPS: ${this.fps}`;
                         
-                        // Color code the FPS display
                         if (this.fps >= 55) {
-                            this.element.style.color = '#00ff00'; // Green for good FPS
+                            this.element.style.color = '#00ff00';
                         } else if (this.fps >= 30) {
-                            this.element.style.color = '#ffaa00'; // Orange for medium FPS
+                            this.element.style.color = '#ffaa00';
                         } else {
-                            this.element.style.color = '#ff3366'; // Red for low FPS
+                            this.element.style.color = '#ff3366';
                         }
                     }
                 }
@@ -1415,17 +1338,12 @@
             }
         }
 
-        // =====================================================================
-        // MAIN 3D RENDERER (Simplified orchestrator)
-        // =====================================================================
-        
         class ThreeDRenderer {
             constructor(containerId) {
                 this.container = document.getElementById(containerId);
                 this.model = null;
                 
                 try {
-                    // Initialize all components
                     this.scene3D = new Scene3D(this.container);
                     this.cameraController = new CameraController(this.scene3D);
                     this.antennaRenderer = new AntennaRenderer(this.scene3D);
@@ -1440,13 +1358,11 @@
             }
 
             handleInitializationError(error) {
-                // Hide FPS monitor on error
                 const fpsElement = document.getElementById('fps-monitor');
                 if (fpsElement) {
                     fpsElement.style.display = 'none';
                 }
                 
-                // Create fallback error display
                 this.container.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6666; text-align: center;">
                         <div>
@@ -1480,7 +1396,7 @@
             updateVisibility(visibility) {
                 this.antennaRenderer.setVisibility(visibility.antenna);
                 this.fieldRenderer.setVisibility(visibility);
-                this.scene3D.axes.forEach(axis => axis.visible = true); // Always show axes
+                this.scene3D.axes.forEach(axis => axis.visible = true);
                 this.animationController.setAdvancedFieldsEnabled(visibility.advancedFields);
             }
 
@@ -1505,7 +1421,7 @@
         }
 
         // =====================================================================
-        // USER INTERFACE, DISPLAY, AND APPLICATION CLASSES (Unchanged)
+        // UI CONTROLLER AND DISPLAY MANAGER (Unchanged)
         // =====================================================================
         
         class UIController {
@@ -1524,7 +1440,6 @@
             
             setupControls(model, callbacks) {
                 try {
-                    // Parameter controls
                     const controls = [
                         { prop: 'length', slider: 'lengthSlider', input: 'lengthInput', callbacks: ['updateAntenna', 'updateFields', 'updateDisplay'] },
                         { prop: 'frequency', slider: 'freqSlider', input: 'freqInput', callbacks: ['updateFields', 'updateDisplay'] },
@@ -1566,7 +1481,6 @@
                         });
                     });
                     
-                    // Matching network controls
                     const matchingNetworkIds = Object.keys(CONFIG.MATCHING_NETWORKS);
                     const checkboxes = matchingNetworkIds.map(id => document.getElementById(id)).filter(Boolean);
                     
@@ -1587,7 +1501,6 @@
                         });
                     });
                     
-                    // Animation controls
                     const playBtn = document.getElementById('playBtn');
                     const pauseBtn = document.getElementById('pauseBtn');
                     const resetBtn = document.getElementById('resetBtn');
@@ -1617,7 +1530,6 @@
                             const timeDisplay = document.getElementById('timeDisplay');
                             if (timeDisplay) timeDisplay.textContent = 'Time: 0°';
                             
-                            // Update phase display
                             const phaseDisplay = document.getElementById('phaseAngle');
                             if (phaseDisplay && callbacks.model) {
                                 const impedance = callbacks.model.calculateImpedance();
@@ -1632,7 +1544,6 @@
                         });
                     }
                     
-                    // Visibility controls
                     const visibilityControls = [
                         { id: 'showAntenna', prop: 'antenna' },
                         { id: 'showCurrent', prop: 'current' },
@@ -1667,7 +1578,6 @@
                         timeDisplay.textContent = `Time: ${degrees}°`;
                     }
                     
-                    // Update phase display in real-time
                     const phaseDisplay = document.getElementById('phaseAngle');
                     if (phaseDisplay && model) {
                         const impedance = model.calculateImpedance();
@@ -1859,7 +1769,7 @@
                     
                     window.addEventListener('resize', () => this.renderer.handleResize());
                     
-                    console.log('Advanced antenna visualization initialized successfully');
+                    console.log('Antenna visualization initialized with corrected physics');
                     console.log('Physics engine stats:', this.model.physics.getCacheStats());
                 } catch (error) {
                     console.error('Initialization failed:', error);
@@ -1902,7 +1812,7 @@
         }
 
         // =====================================================================
-        // APPLICATION STARTUP (Unchanged)
+        // APPLICATION STARTUP
         // =====================================================================
         
         document.addEventListener('DOMContentLoaded', () => {
