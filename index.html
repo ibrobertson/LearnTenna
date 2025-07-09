@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced 3D Antenna Visualization</title>
+    <title>Advanced 3D Antenna Visualization with Nodes/Antinodes</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -136,7 +136,7 @@
         
         .info-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 20px;
         }
         
@@ -196,27 +196,53 @@
             color: #ffff66;
         }
 
-        .physics-correction {
-            background-color: #2a4a1a;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            border-left: 4px solid #00ff00;
-            font-size: 12px;
+        .legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            font-size: 11px;
+            margin-top: 5px;
         }
-        
-        .physics-correction h4 {
-            margin: 0 0 8px 0;
-            color: #66ff66;
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Advanced 3D Antenna Visualization</h1>
+        <h1>Advanced 3D Antenna Visualization with Nodes/Antinodes</h1>
         
         <div id="canvas-container">
             <div id="fps-monitor">FPS: --</div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #ff0000;"></div>
+                <span>Current Nodes (I=0)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #ff6600;"></div>
+                <span>Current Antinodes (I=max)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #0066ff;"></div>
+                <span>Voltage Nodes (V=0)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #00aaff;"></div>
+                <span>Voltage Antinodes (V=max)</span>
+            </div>
         </div>
         
         <div class="controls">
@@ -287,10 +313,13 @@
                     <label><input type="checkbox" id="showVoltage" checked> Voltage</label>
                 </div>
                 <div class="control-item">
-                    <label><input type="checkbox" id="showFields" checked> Fields</label>
+                    <label><input type="checkbox" id="showFields" checked> E-Field</label>
                 </div>
                 <div class="control-item">
-                    <label><input type="checkbox" id="showAdvancedFields" checked> Field Lines</label>
+                    <label><input type="checkbox" id="showAdvancedFields" checked> H-Field</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showNodes" checked> Nodes/Antinodes</label>
                 </div>
                 <div class="control-item">
                     <label><input type="checkbox" id="showDebug"> Debug Info</label>
@@ -309,6 +338,7 @@
                     <li>Wire Diameter: <span class="value" id="currentWireDia">2.0mm</span></li>
                 </ul>
             </div>
+            
             <div class="info-box">
                 <h3>Feedpoint Analysis</h3>
                 <ul>
@@ -321,12 +351,18 @@
                     <li>Antenna Type: <span class="value" id="antennaType">Half-Wave Dipole</span></li>
                 </ul>
             </div>
-        </div>
-        
-        <div class="physics-correction">
-            <h4>✅ Physics Correction Applied</h4>
-            <p><strong>Fixed:</strong> Current and voltage distributions now remain constant when moving feedpoint, as they should in real antennas. Only impedance and phase relationships change with feedpoint position.</p>
-            <p><strong>Now Accurate:</strong> Standing wave patterns determined by antenna length + frequency, not feedpoint location.</p>
+
+            <div class="info-box">
+                <h3>Resonance Analysis</h3>
+                <ul>
+                    <li>Harmonic: <span class="value" id="harmonicNumber">1st (Fundamental)</span></li>
+                    <li>Current Nodes: <span class="value" id="currentNodesCount">2</span></li>
+                    <li>Current Antinodes: <span class="value" id="currentAntinodesCount">1</span></li>
+                    <li>Voltage Nodes: <span class="value" id="voltageNodesCount">1</span></li>
+                    <li>Voltage Antinodes: <span class="value" id="voltageAntinodesCount">2</span></li>
+                    <li>Resonant: <span class="value" id="resonantStatus">Yes</span></li>
+                </ul>
+            </div>
         </div>
         
         <div class="debug-panel" id="debugPanel" style="display: none;">
@@ -371,6 +407,12 @@
                 CURVE_POINTS: 50,
                 AXIS_LENGTH: 15,
                 LABEL_DISTANCE: 16
+            },
+            NODES: {
+                NODE_SIZE: 0.25,
+                ANTINODE_SIZE: 0.35,
+                MIN_AMPLITUDE_THRESHOLD: 0.1,
+                POSITION_TOLERANCE: 0.05
             }
         };
 
@@ -407,7 +449,266 @@
         };
 
         // =====================================================================
-        // ANTENNA PHYSICS ENGINE (CORRECTED)
+        // NODES/ANTINODES CALCULATOR
+        // =====================================================================
+        
+        class NodesCalculator {
+            constructor() {
+                this.tolerance = CONFIG.NODES.POSITION_TOLERANCE;
+                this.minThreshold = CONFIG.NODES.MIN_AMPLITUDE_THRESHOLD;
+            }
+
+            calculateNodesAndAntinodes(model) {
+                const { length, frequency } = model;
+                const k = model.waveNumber;
+                const electricalLength = model.electricalLength;
+                
+                // Calculate theoretical node/antinode positions
+                const currentNodes = this._calculateCurrentNodes(length, k);
+                const currentAntinodes = this._calculateCurrentAntinodes(length, k);
+                const voltageNodes = this._calculateVoltageNodes(length, k);
+                const voltageAntinodes = this._calculateVoltageAntinodes(length, k);
+                
+                // Determine harmonic number
+                const harmonicNumber = this._getHarmonicNumber(electricalLength);
+                
+                const result = {
+                    current: {
+                        nodes: currentNodes,
+                        antinodes: currentAntinodes
+                    },
+                    voltage: {
+                        nodes: voltageNodes,
+                        antinodes: voltageAntinodes
+                    },
+                    harmonic: harmonicNumber,
+                    isResonant: this._isResonant(model)
+                };
+                
+                return result;
+            }
+
+            _calculateCurrentNodes(length, k) {
+                const nodes = [];
+                const halfLength = length / 2;
+                
+                // Current is zero at the ends for any finite wire
+                nodes.push(-halfLength);
+                nodes.push(halfLength);
+                
+                // Find additional current nodes along the antenna
+                // Current distribution: I(x) = cos(k * |x|) from center
+                // cos(k*x) = 0 when k*x = (n+0.5)*π
+                for (let n = 0; n < 8; n++) {
+                    const nodePosition = ((n + 0.5) * Math.PI) / k;
+                    
+                    if (nodePosition < halfLength - 0.1) { // Leave some margin from ends
+                        nodes.push(nodePosition);
+                        nodes.push(-nodePosition);
+                    }
+                }
+                
+                return [...new Set(nodes)].sort((a, b) => a - b); // Remove duplicates
+            }
+
+            _calculateCurrentAntinodes(length, k) {
+                const antinodes = [];
+                const halfLength = length / 2;
+                
+                // Current antinode at center (always)
+                antinodes.push(0);
+                
+                // Find additional current antinodes
+                // Current is maximum when cos(k*x) = ±1, i.e., k*x = n*π
+                for (let n = 1; n < 8; n++) {
+                    const antinodePosition = (n * Math.PI) / k;
+                    
+                    if (antinodePosition < halfLength - 0.1) {
+                        antinodes.push(antinodePosition);
+                        antinodes.push(-antinodePosition);
+                    }
+                }
+                
+                return [...new Set(antinodes)].sort((a, b) => a - b);
+            }
+
+            _calculateVoltageNodes(length, k) {
+                const nodes = [];
+                const halfLength = length / 2;
+                
+                // Voltage node at center (for center-fed dipole)
+                nodes.push(0);
+                
+                // Find additional voltage nodes
+                // Voltage distribution: V(x) = sin(k * |x|) * sign(x)
+                // sin(k*x) = 0 when k*x = n*π
+                for (let n = 1; n < 8; n++) {
+                    const nodePosition = (n * Math.PI) / k;
+                    
+                    if (nodePosition < halfLength - 0.1) {
+                        nodes.push(nodePosition);
+                        nodes.push(-nodePosition);
+                    }
+                }
+                
+                return [...new Set(nodes)].sort((a, b) => a - b);
+            }
+
+            _calculateVoltageAntinodes(length, k) {
+                const antinodes = [];
+                const halfLength = length / 2;
+                
+                // Voltage antinodes at the ends (always)
+                antinodes.push(-halfLength);
+                antinodes.push(halfLength);
+                
+                // Find additional voltage antinodes
+                // Voltage is maximum when sin(k*x) = ±1, i.e., k*x = (n+0.5)*π
+                for (let n = 0; n < 8; n++) {
+                    const antinodePosition = ((n + 0.5) * Math.PI) / k;
+                    
+                    if (antinodePosition < halfLength - 0.1 && antinodePosition > 0.1) {
+                        antinodes.push(antinodePosition);
+                        antinodes.push(-antinodePosition);
+                    }
+                }
+                
+                return [...new Set(antinodes)].sort((a, b) => a - b);
+            }
+
+            _getHarmonicNumber(electricalLength) {
+                const harmonicFloat = electricalLength * 2; // Convert to harmonic number
+                const harmonic = Math.round(harmonicFloat);
+                
+                if (harmonic <= 0) return 1;
+                return harmonic;
+            }
+
+            _isResonant(model) {
+                const impedance = model.calculateImpedance();
+                return Math.abs(impedance.reactance) < Math.max(15, impedance.resistance * 0.2);
+            }
+
+            getHarmonicName(harmonicNumber) {
+                const names = ['', '1st (Fundamental)', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+                return names[harmonicNumber] || `${harmonicNumber}th`;
+            }
+        }
+
+        // =====================================================================
+        // NODES RENDERER
+        // =====================================================================
+        
+        class NodesRenderer {
+            constructor(scene3D) {
+                this.scene3D = scene3D;
+                this.nodeMarkers = [];
+                this.calculator = new NodesCalculator();
+            }
+
+            update(model) {
+                this.clear();
+                
+                try {
+                    const nodesData = this.calculator.calculateNodesAndAntinodes(model);
+                    this.createNodeMarkers(nodesData);
+                } catch (error) {
+                    console.error('Error updating nodes:', error);
+                }
+            }
+
+            createNodeMarkers(nodesData) {
+                // Create current nodes (red spheres)
+                nodesData.current.nodes.forEach((position, index) => {
+                    this.createMarker(position, CONFIG.NODES.NODE_SIZE, 0xff0000, 'current-node');
+                });
+
+                // Create current antinodes (orange spheres)
+                nodesData.current.antinodes.forEach((position, index) => {
+                    this.createMarker(position, CONFIG.NODES.ANTINODE_SIZE, 0xff6600, 'current-antinode');
+                });
+
+                // Create voltage nodes (blue spheres)
+                nodesData.voltage.nodes.forEach((position, index) => {
+                    this.createMarker(position, CONFIG.NODES.NODE_SIZE, 0x0066ff, 'voltage-node');
+                });
+
+                // Create voltage antinodes (cyan spheres)
+                nodesData.voltage.antinodes.forEach((position, index) => {
+                    this.createMarker(position, CONFIG.NODES.ANTINODE_SIZE, 0x00aaff, 'voltage-antinode');
+                });
+            }
+
+            createMarker(position, size, color, type) {
+                const geometry = new THREE.SphereGeometry(size, 16, 16);
+                const material = new THREE.MeshLambertMaterial({ 
+                    color: color,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const marker = new THREE.Mesh(geometry, material);
+                marker.position.set(position, 0, 0);
+                
+                // Add a subtle glow effect for antinodes
+                if (type.includes('antinode')) {
+                    const glowGeometry = new THREE.SphereGeometry(size * 1.4, 12, 12);
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    glow.position.set(position, 0, 0);
+                    this.scene3D.scene.add(glow);
+                    this.nodeMarkers.push(glow);
+                }
+                
+                marker.userData = { type: type, position: position };
+                this.scene3D.scene.add(marker);
+                this.nodeMarkers.push(marker);
+            }
+
+            animateNodes(time) {
+                this.nodeMarkers.forEach(marker => {
+                    if (marker.userData && marker.userData.type) {
+                        const isAntinode = marker.userData.type.includes('antinode');
+                        
+                        if (isAntinode) {
+                            // Pulse antinodes
+                            const pulse = 0.8 + 0.2 * Math.sin(time * 2);
+                            marker.material.opacity = pulse;
+                            marker.scale.setScalar(0.9 + 0.1 * Math.sin(time * 3));
+                        } else {
+                            // Steady nodes with slight fade
+                            marker.material.opacity = 0.6 + 0.2 * Math.sin(time * 0.5);
+                        }
+                    }
+                });
+            }
+
+            clear() {
+                this.nodeMarkers.forEach(marker => {
+                    if (this.scene3D.scene) {
+                        this.scene3D.scene.remove(marker);
+                    }
+                });
+                this.nodeMarkers = [];
+            }
+
+            setVisibility(visible) {
+                this.nodeMarkers.forEach((marker, index) => {
+                    marker.visible = visible;
+                });
+            }
+
+            getNodesInfo(model) {
+                return this.calculator.calculateNodesAndAntinodes(model);
+            }
+        }
+
+        // =====================================================================
+        // ANTENNA PHYSICS ENGINE (Same as before)
         // =====================================================================
         
         class AntennaPhysicsEngine {
@@ -542,10 +843,6 @@
                 };
             }
 
-            // =====================================================================
-            // CORRECTED SPATIAL FIELD DISTRIBUTIONS
-            // =====================================================================
-            
             calculateSpatialDistributions(params, positions) {
                 const key = this._getDistributionCacheKey(params, positions.length);
                 
@@ -553,7 +850,7 @@
                     return this._distributionCache.get(key);
                 }
 
-                const { length, frequency } = params; // NOTE: feedPosition removed - doesn't affect patterns!
+                const { length, frequency } = params;
                 const k = this.getWaveNumber(frequency);
                 
                 const distributions = positions.map(x => 
@@ -570,20 +867,11 @@
                 return result;
             }
 
-            // PHYSICS CORRECTION: Standing wave patterns are ONLY determined by antenna length and frequency
-            // Feedpoint position does NOT change the current/voltage distributions along the wire
             _calculateFieldAmplitudesAtPosition(k, wireLength, x) {
-                // CORRECTED PHYSICS: Always calculate relative to antenna center
-                // Standing wave patterns are determined by physical dimensions, not feedpoint
-                
                 const distanceFromCenter = Math.abs(x);
                 const electricalDistance = k * distanceFromCenter;
                 
-                // Current distribution: Always cosine from center (max at center, zero at ends)
                 const currentAmp = Math.cos(electricalDistance) * 2;
-                
-                // Voltage distribution: Always sine from center with proper phase
-                // (zero at center, max at ends, opposite phases on each side)
                 const phaseSign = x >= 0 ? 1 : -1;
                 const voltageAmp = Math.sin(electricalDistance) * phaseSign * 4;
                 
@@ -660,7 +948,6 @@
             }
 
             _getDistributionCacheKey(params, numPoints) {
-                // CORRECTED: Cache key no longer includes feedPosition since it doesn't affect distributions
                 return `dist_${params.length}_${params.frequency}_${numPoints}`;
             }
 
@@ -678,7 +965,7 @@
         }
 
         // =====================================================================
-        // ANTENNA MODEL (Updated to use corrected physics)
+        // ANTENNA MODEL
         // =====================================================================
         
         class AntennaModel {
@@ -728,14 +1015,14 @@
                 return this.physics.calculateSpatialDistributions({
                     length: this.length,
                     frequency: this.frequency,
-                    feedPosition: this.feedPosition, // Still passed for cache key, but doesn't affect patterns
+                    feedPosition: this.feedPosition,
                     wireDiameter: this.wireDiameter
                 }, positions);
             }
         }
 
         // =====================================================================
-        // 3D RENDERER COMPONENTS (Unchanged - using corrected physics)
+        // 3D RENDERER COMPONENTS (Updated to include nodes)
         // =====================================================================
 
         class Scene3D {
@@ -782,9 +1069,9 @@
                 const axisOpacity = CONFIG.RENDERING.AXIS_OPACITY;
                 
                 const axes = [
-                    { color: 0xff0000, direction: [axisLength, 0, 0] }, // X - Red
-                    { color: 0x00ff00, direction: [0, axisLength, 0] }, // Y - Green  
-                    { color: 0x0000ff, direction: [0, 0, axisLength] }  // Z - Blue
+                    { color: 0xff0000, direction: [axisLength, 0, 0] },
+                    { color: 0x00ff00, direction: [0, axisLength, 0] },
+                    { color: 0x0000ff, direction: [0, 0, axisLength] }
                 ];
 
                 axes.forEach(axis => {
@@ -1103,8 +1390,11 @@
                 if (this.currentCurve) this.currentCurve.visible = visibility.current;
                 if (this.voltageCurve) this.voltageCurve.visible = visibility.voltage;
                 
+                // E-Field visibility (electric field lines)
                 this.eFields.forEach(field => field.visible = visibility.fields);
-                this.hFields.forEach(field => field.visible = visibility.fields);
+                
+                // H-Field visibility (magnetic field rings)
+                this.hFields.forEach(field => field.visible = visibility.advancedFields);
             }
 
             getAllFields() {
@@ -1120,8 +1410,9 @@
         }
 
         class AnimationController {
-            constructor(fieldRenderer) {
+            constructor(fieldRenderer, nodesRenderer) {
                 this.fieldRenderer = fieldRenderer;
+                this.nodesRenderer = nodesRenderer;
                 this.advancedFieldsEnabled = true;
             }
 
@@ -1137,6 +1428,11 @@
                 }
                 if (curves.voltage && curves.voltage.userData.amplitudes) {
                     this.updateCurve(curves.voltage, time, phaseAngle);
+                }
+                
+                // Animate nodes
+                if (this.nodesRenderer) {
+                    this.nodesRenderer.animateNodes(time);
                 }
                 
                 if (this.advancedFieldsEnabled) {
@@ -1348,7 +1644,8 @@
                     this.cameraController = new CameraController(this.scene3D);
                     this.antennaRenderer = new AntennaRenderer(this.scene3D);
                     this.fieldRenderer = new FieldRenderer(this.scene3D);
-                    this.animationController = new AnimationController(this.fieldRenderer);
+                    this.nodesRenderer = new NodesRenderer(this.scene3D);
+                    this.animationController = new AnimationController(this.fieldRenderer, this.nodesRenderer);
                     this.performanceMonitor = new PerformanceMonitor('fps-monitor');
                     
                 } catch (error) {
@@ -1382,6 +1679,7 @@
             updateFields(model) {
                 this.model = model;
                 this.fieldRenderer.update(model);
+                this.nodesRenderer.update(model);
             }
 
             updateAnimation(time, isPlaying) {
@@ -1396,8 +1694,13 @@
             updateVisibility(visibility) {
                 this.antennaRenderer.setVisibility(visibility.antenna);
                 this.fieldRenderer.setVisibility(visibility);
+                this.nodesRenderer.setVisibility(visibility.nodes);
                 this.scene3D.axes.forEach(axis => axis.visible = true);
                 this.animationController.setAdvancedFieldsEnabled(visibility.advancedFields);
+            }
+
+            getNodesInfo(model) {
+                return this.nodesRenderer.getNodesInfo(model);
             }
 
             render() {
@@ -1421,7 +1724,7 @@
         }
 
         // =====================================================================
-        // UI CONTROLLER AND DISPLAY MANAGER (Unchanged)
+        // UI CONTROLLER AND DISPLAY MANAGER (Updated for nodes)
         // =====================================================================
         
         class UIController {
@@ -1432,6 +1735,7 @@
                     voltage: true,
                     fields: true,
                     advancedFields: true,
+                    nodes: true,
                     debug: false
                 };
                 this.time = 0;
@@ -1550,6 +1854,7 @@
                         { id: 'showVoltage', prop: 'voltage' },
                         { id: 'showFields', prop: 'fields' },
                         { id: 'showAdvancedFields', prop: 'advancedFields' },
+                        { id: 'showNodes', prop: 'nodes' },
                         { id: 'showDebug', prop: 'debug' }
                     ];
                     
@@ -1594,6 +1899,7 @@
             constructor() {
                 this.elements = new Map();
                 this._cacheElements();
+                this.nodesCalculator = new NodesCalculator();
             }
             
             _cacheElements() {
@@ -1601,7 +1907,9 @@
                     'currentLength', 'currentFreq', 'currentWavelength', 
                     'currentElectricalLength', 'currentWireDia', 'feedPositionDisplay',
                     'antennaImpedanceDisplay', 'impedanceDisplay', 'matchingTypeDisplay',
-                    'swrDisplay', 'qualityDisplay', 'antennaType', 'debugContent'
+                    'swrDisplay', 'qualityDisplay', 'antennaType', 'debugContent',
+                    'harmonicNumber', 'currentNodesCount', 'currentAntinodesCount',
+                    'voltageNodesCount', 'voltageAntinodesCount', 'resonantStatus'
                 ];
                 
                 ids.forEach(id => {
@@ -1622,6 +1930,7 @@
                     this.updateBasicParameters(model);
                     this.updateFeedPosition(model);
                     this.updateImpedanceAnalysis(model);
+                    this.updateResonanceAnalysis(model);
                     this.updateDebugInfo(model);
                     this.updatePhaseDisplay(model);
                 } catch (error) {
@@ -1676,6 +1985,22 @@
                 this._updateElement('antennaType', model.getAntennaType());
             }
 
+            updateResonanceAnalysis(model) {
+                const nodesData = this.nodesCalculator.calculateNodesAndAntinodes(model);
+                
+                this._updateElement('harmonicNumber', this.nodesCalculator.getHarmonicName(nodesData.harmonic));
+                this._updateElement('currentNodesCount', nodesData.current.nodes.length.toString());
+                this._updateElement('currentAntinodesCount', nodesData.current.antinodes.length.toString());
+                this._updateElement('voltageNodesCount', nodesData.voltage.nodes.length.toString());
+                this._updateElement('voltageAntinodesCount', nodesData.voltage.antinodes.length.toString());
+                
+                const resonantElement = this.elements.get('resonantStatus');
+                if (resonantElement) {
+                    resonantElement.textContent = nodesData.isResonant ? 'Yes' : 'No';
+                    resonantElement.style.color = nodesData.isResonant ? '#00ff00' : '#ff6600';
+                }
+            }
+
             updatePhaseDisplay(model) {
                 const phaseAngleElement = document.getElementById('phaseAngle');
                 if (phaseAngleElement) {
@@ -1704,6 +2029,7 @@
                 const impedance = model.calculateImpedance();
                 const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
                 const cacheStats = model.physics.getCacheStats();
+                const nodesData = this.nodesCalculator.calculateNodesAndAntinodes(model);
                 
                 const debugData = [
                     ['Wavelength', `${model.wavelength.toFixed(2)}m`],
@@ -1718,6 +2044,7 @@
                     ['Z Magnitude', `${PhysicsUtils.calculateImpedanceMagnitude(impedance.resistance, impedance.reactance).toFixed(1)}Ω`],
                     ['I-V Phase Angle', `${(phaseAngle * 180 / Math.PI).toFixed(1)}°`],
                     ['Resonant?', `${Math.abs(impedance.reactance) < 15 ? 'Yes' : 'No'}`],
+                    ['Harmonic Number', `${nodesData.harmonic}`],
                     ['Physics Cache (Z)', `${cacheStats.impedanceCacheSize} entries`],
                     ['Physics Cache (Dist)', `${cacheStats.distributionCacheSize} entries`]
                 ];
@@ -1765,11 +2092,14 @@
                     this.renderer.updateFields(this.model);
                     this.display.updateAll(this.model);
                     
+                    // Force initial visibility update to show nodes if enabled
+                    this.renderer.updateVisibility(this.ui.visibility);
+                    
                     this.animate();
                     
                     window.addEventListener('resize', () => this.renderer.handleResize());
                     
-                    console.log('Antenna visualization initialized with corrected physics');
+                    console.log('Antenna visualization with nodes/antinodes initialized');
                     console.log('Physics engine stats:', this.model.physics.getCacheStats());
                 } catch (error) {
                     console.error('Initialization failed:', error);
