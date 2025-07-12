@@ -457,7 +457,7 @@
         };
 
         // =====================================================================
-        // NODES/ANTINODES CALCULATOR
+        // NODES/ANTINODES CALCULATOR (Enhanced with Resonance Guidance)
         // =====================================================================
         
         class NodesCalculator {
@@ -494,6 +494,99 @@
                 };
                 
                 return result;
+            }
+
+            // NEW: Get resonance guidance with specific tuning advice
+            getResonanceGuidance(model) {
+                const impedance = model.calculateImpedance();
+                const reactance = impedance.reactance;
+                const resistance = impedance.resistance;
+                const isResonant = Math.abs(reactance) < Math.max(15, resistance * 0.2);
+                
+                if (isResonant) {
+                    return {
+                        status: 'Resonant',
+                        guidance: 'Antenna is well-matched',
+                        color: '#00ff00',
+                        lengthAdjustment: null
+                    };
+                }
+                
+                // Calculate approximate length adjustment needed
+                const electricalLength = model.electricalLength;
+                const currentLength = model.length;
+                
+                let guidance, lengthAdjustment, targetLength;
+                
+                if (reactance < -15) {
+                    // Capacitive reactance - antenna is too short
+                    // Estimate length needed: typically need to increase by reactance/377 * wavelength
+                    const reactanceRatio = Math.abs(reactance) / 377;
+                    lengthAdjustment = reactanceRatio * model.wavelength * 0.1; // Conservative estimate
+                    targetLength = currentLength + lengthAdjustment;
+                    
+                    guidance = `Too Short - Add ~${lengthAdjustment.toFixed(1)}m wire (Target: ${targetLength.toFixed(1)}m)`;
+                } else if (reactance > 15) {
+                    // Inductive reactance - antenna is too long
+                    const reactanceRatio = reactance / 377;
+                    lengthAdjustment = reactanceRatio * model.wavelength * 0.1;
+                    targetLength = currentLength - lengthAdjustment;
+                    
+                    guidance = `Too Long - Remove ~${lengthAdjustment.toFixed(1)}m wire (Target: ${targetLength.toFixed(1)}m)`;
+                } else {
+                    guidance = 'Nearly Resonant - Minor adjustment needed';
+                    lengthAdjustment = 0;
+                }
+                
+                return {
+                    status: 'Not Resonant',
+                    guidance: guidance,
+                    color: '#ff6600',
+                    lengthAdjustment: lengthAdjustment,
+                    reactance: reactance
+                };
+            }
+
+            // NEW: Enhanced method to get detailed resonance information
+            getDetailedResonanceInfo(model) {
+                const basicInfo = this.calculateNodesAndAntinodes(model);
+                const guidance = this.getResonanceGuidance(model);
+                const impedance = model.calculateImpedance();
+                
+                // Calculate how far we are from common resonant lengths
+                const wavelength = model.wavelength;
+                const currentLength = model.length;
+                
+                const commonResonantLengths = [
+                    { length: wavelength * 0.25, name: 'λ/4 (Quarter Wave)' },
+                    { length: wavelength * 0.5, name: 'λ/2 (Half Wave)' },
+                    { length: wavelength * 0.75, name: '3λ/4 (Three Quarter)' },
+                    { length: wavelength * 1.0, name: 'λ (Full Wave)' },
+                    { length: wavelength * 1.5, name: '3λ/2 (One and Half)' }
+                ];
+                
+                // Find the closest resonant length
+                let closestResonant = commonResonantLengths[0];
+                let minDifference = Math.abs(currentLength - closestResonant.length);
+                
+                commonResonantLengths.forEach(resonant => {
+                    const difference = Math.abs(currentLength - resonant.length);
+                    if (difference < minDifference) {
+                        minDifference = difference;
+                        closestResonant = resonant;
+                    }
+                });
+                
+                return {
+                    ...basicInfo,
+                    guidance: guidance,
+                    impedance: impedance,
+                    closestResonant: {
+                        ...closestResonant,
+                        difference: currentLength - closestResonant.length,
+                        percentOff: ((currentLength - closestResonant.length) / closestResonant.length * 100)
+                    }
+                };
             }
 
             _calculateCurrentNodes(length, k) {
@@ -1732,7 +1825,7 @@
         }
 
         // =====================================================================
-        // UI CONTROLLER AND DISPLAY MANAGER (Updated for nodes)
+        // UI CONTROLLER AND DISPLAY MANAGER (Enhanced with Resonance Guidance)
         // =====================================================================
         
         class UIController {
@@ -1993,19 +2086,38 @@
                 this._updateElement('antennaType', model.getAntennaType());
             }
 
+            // ENHANCED: Replace the existing updateResonanceAnalysis method
             updateResonanceAnalysis(model) {
-                const nodesData = this.nodesCalculator.calculateNodesAndAntinodes(model);
+                const detailedInfo = this.nodesCalculator.getDetailedResonanceInfo(model);
                 
-                this._updateElement('harmonicNumber', this.nodesCalculator.getHarmonicName(nodesData.harmonic));
-                this._updateElement('currentNodesCount', nodesData.current.nodes.length.toString());
-                this._updateElement('currentAntinodesCount', nodesData.current.antinodes.length.toString());
-                this._updateElement('voltageNodesCount', nodesData.voltage.nodes.length.toString());
-                this._updateElement('voltageAntinodesCount', nodesData.voltage.antinodes.length.toString());
+                // Update basic counts
+                this._updateElement('harmonicNumber', this.nodesCalculator.getHarmonicName(detailedInfo.harmonic));
+                this._updateElement('currentNodesCount', detailedInfo.current.nodes.length.toString());
+                this._updateElement('currentAntinodesCount', detailedInfo.current.antinodes.length.toString());
+                this._updateElement('voltageNodesCount', detailedInfo.voltage.nodes.length.toString());
+                this._updateElement('voltageAntinodesCount', detailedInfo.voltage.antinodes.length.toString());
                 
+                // Enhanced resonant status with guidance
                 const resonantElement = this.elements.get('resonantStatus');
                 if (resonantElement) {
-                    resonantElement.textContent = nodesData.isResonant ? 'Yes' : 'No';
-                    resonantElement.style.color = nodesData.isResonant ? '#00ff00' : '#ff6600';
+                    const guidance = detailedInfo.guidance;
+                    
+                    // Create a more detailed display
+                    resonantElement.innerHTML = `
+                        <div style="font-weight: bold; color: ${guidance.color};">${guidance.status}</div>
+                        <div style="font-size: 11px; color: #ccc; margin-top: 3px;">${guidance.guidance}</div>
+                    `;
+                    
+                    // Add closest resonant length info if not resonant
+                    if (guidance.status !== 'Resonant') {
+                        const closestInfo = detailedInfo.closestResonant;
+                        const additionalInfo = document.createElement('div');
+                        additionalInfo.style.fontSize = '10px';
+                        additionalInfo.style.color = '#aaa';
+                        additionalInfo.style.marginTop = '2px';
+                        additionalInfo.textContent = `Closest: ${closestInfo.name} (${closestInfo.difference > 0 ? '+' : ''}${closestInfo.difference.toFixed(1)}m)`;
+                        resonantElement.appendChild(additionalInfo);
+                    }
                 }
             }
 
@@ -2030,6 +2142,7 @@
                 return { text: "Very Poor - Major Mismatch", color: '#ff3366' };
             }
             
+            // ENHANCED: Replace the existing updateDebugInfo method
             updateDebugInfo(model) {
                 const debugContent = this.elements.get('debugContent');
                 if (!debugContent) return;
@@ -2037,7 +2150,7 @@
                 const impedance = model.calculateImpedance();
                 const phaseAngle = PhysicsUtils.calculatePhaseAngle(impedance.resistance, impedance.reactance);
                 const cacheStats = model.physics.getCacheStats();
-                const nodesData = this.nodesCalculator.calculateNodesAndAntinodes(model);
+                const detailedInfo = this.nodesCalculator.getDetailedResonanceInfo(model);
                 
                 const debugData = [
                     ['Wavelength', `${model.wavelength.toFixed(2)}m`],
@@ -2051,8 +2164,10 @@
                     ['Calculated X', `${impedance.reactance >= 0 ? '+' : ''}${impedance.reactance.toFixed(2)}Ω`],
                     ['Z Magnitude', `${PhysicsUtils.calculateImpedanceMagnitude(impedance.resistance, impedance.reactance).toFixed(1)}Ω`],
                     ['I-V Phase Angle', `${(phaseAngle * 180 / Math.PI).toFixed(1)}°`],
-                    ['Resonant?', `${Math.abs(impedance.reactance) < 15 ? 'Yes' : 'No'}`],
-                    ['Harmonic Number', `${nodesData.harmonic}`],
+                    ['Resonance Status', detailedInfo.guidance.status],
+                    ['Tuning Guidance', detailedInfo.guidance.guidance],
+                    ['Closest Resonant', `${detailedInfo.closestResonant.name} (${detailedInfo.closestResonant.difference.toFixed(2)}m off)`],
+                    ['Harmonic Number', `${detailedInfo.harmonic}`],
                     ['Physics Cache (Z)', `${cacheStats.impedanceCacheSize} entries`],
                     ['Physics Cache (Dist)', `${cacheStats.distributionCacheSize} entries`]
                 ];
@@ -2107,7 +2222,7 @@
                     
                     window.addEventListener('resize', () => this.renderer.handleResize());
                     
-                    console.log('Antenna visualization with nodes/antinodes initialized');
+                    console.log('Enhanced antenna visualization with resonance guidance initialized');
                     console.log('Physics engine stats:', this.model.physics.getCacheStats());
                 } catch (error) {
                     console.error('Initialization failed:', error);
