@@ -25,6 +25,19 @@
         console.log('Half-wave dipole:', PhysicsUtils.formatImpedance(halfWave.resistance, halfWave.reactance));
         console.log('SWR:', PhysicsUtils.calculateSWR(halfWave.resistance, halfWave.reactance).toFixed(2) + ':1');
         
+		// Test problematic cases
+console.log('--- Edge Case Tests ---');
+
+// Test pure 50Ω load (should give SWR = 1.0)
+console.log('50Ω load SWR:', PhysicsUtils.calculateSWR(50, 0).toFixed(2));
+
+// Test high impedance mismatch  
+console.log('200Ω load SWR:', PhysicsUtils.calculateSWR(200, 0).toFixed(2));
+
+// Test reactive load
+console.log('50+j50Ω SWR:', PhysicsUtils.calculateSWR(50, 50).toFixed(2));
+		
+		
         const matched = MatchingNetworks.applyMatching(halfWave, 'use4to1Balun');
         console.log('With 4:1 balun:', PhysicsUtils.formatImpedance(matched.impedance.resistance, matched.impedance.reactance));
     </script>
