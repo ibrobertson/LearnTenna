@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Physics Test</title>
+</head>
+<body>
+    <h1>Physics Module Test</h1>
+    <p>Check browser console for results</p>
+    
+    <script type="module">
+        import { PhysicsUtils } from './physics/PhysicsUtils.js';
+        import { ImpedanceCalculator } from './physics/ImpedanceCalculator.js';
+        import { MatchingNetworks } from './physics/MatchingNetworks.js';
+        
+        console.log('Testing physics modules...');
+        
+        const calc = new ImpedanceCalculator();
+        const halfWave = calc.calculateImpedance({
+            length: 20,
+            frequency: 7.5,
+            feedPosition: 0.5,
+            wireDiameter: 2
+        });
+        
+        console.log('Half-wave dipole:', PhysicsUtils.formatImpedance(halfWave.resistance, halfWave.reactance));
+        console.log('SWR:', PhysicsUtils.calculateSWR(halfWave.resistance, halfWave.reactance).toFixed(2) + ':1');
+        
+        const matched = MatchingNetworks.applyMatching(halfWave, 'use4to1Balun');
+        console.log('With 4:1 balun:', PhysicsUtils.formatImpedance(matched.impedance.resistance, matched.impedance.reactance));
+    </script>
+</body>
+</html>
