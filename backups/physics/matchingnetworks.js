@@ -1,4 +1,4 @@
-﻿import { MATCHING_NETWORKS } from './constants.js';
+import { MATCHING_NETWORKS } from './constants.js';
 
 export class MatchingNetworks {
     static applyMatching(impedance, networkType) {

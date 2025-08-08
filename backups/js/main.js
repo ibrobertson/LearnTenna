@@ -444,18 +444,803 @@ class AntennaModel {
 }
 
 // =====================================================================
+// 3D RENDERER COMPONENTS
 // =====================================================================
-// 3D RENDERER IMPORTS (moved to separate modules)
-// =====================================================================
-import { Scene3D } from '../rendering/Scene3D.js';
-import { CameraController } from '../rendering/CameraController.js';
-import { AntennaRenderer } from '../rendering/AntennaRenderer.js';
-import { NodesRenderer } from '../rendering/NodesRenderer.js';
-import { FieldRenderer } from '../rendering/FieldRenderer.js';
-import { AnimationController } from '../rendering/AnimationController.js';
-import { PerformanceMonitor } from '../rendering/PerformanceMonitor.js';
-import { ThreeDRenderer } from '../rendering/ThreeDRenderer.js';
 
+class Scene3D {
+    constructor(container) {
+        this.container = container;
+        this.scene = null;
+        this.camera = null;
+        this.renderer = null;
+        this.axes = [];
+        
+        this.init();
+    }
+
+    init() {
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x000000);
+        
+        this.camera = new THREE.PerspectiveCamera(
+            75, 
+            this.container.clientWidth / this.container.clientHeight, 
+            0.1, 
+            1000
+        );
+        this.camera.position.set(15, 10, 15);
+        this.camera.lookAt(0, 0, 0);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        this.container.appendChild(this.renderer.domElement);
+        
+        this.setupLighting();
+        this.addCoordinateAxes();
+    }
+
+    setupLighting() {
+        this.scene.add(new THREE.AmbientLight(0x404040, 0.6));
+        const light = new THREE.DirectionalLight(0xffffff, 0.8);
+        light.position.set(10, 10, 5);
+        this.scene.add(light);
+    }
+
+    addCoordinateAxes() {
+        const axisLength = CONFIG.RENDERING.AXIS_LENGTH;
+        const axisOpacity = CONFIG.RENDERING.AXIS_OPACITY;
+        
+        const axes = [
+            { color: 0xff0000, direction: [axisLength, 0, 0] },
+            { color: 0x00ff00, direction: [0, axisLength, 0] },
+            { color: 0x0000ff, direction: [0, 0, axisLength] }
+        ];
+
+        axes.forEach(axis => {
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(...axis.direction)
+            ]);
+            const material = new THREE.LineBasicMaterial({ 
+                color: axis.color, 
+                transparent: true, 
+                opacity: axisOpacity 
+            });
+            const line = new THREE.Line(geometry, material);
+            this.scene.add(line);
+            this.axes.push(line);
+        });
+
+        this.addAxisLabels();
+    }
+
+    addAxisLabels() {
+        const labelDistance = CONFIG.RENDERING.LABEL_DISTANCE;
+        const labelOpacity = 0.4;
+        const labelGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+        
+        const labels = [
+            { color: 0xff0000, position: [labelDistance, 0, 0] },
+            { color: 0x00ff00, position: [0, labelDistance, 0] },
+            { color: 0x0000ff, position: [0, 0, labelDistance] }
+        ];
+
+        labels.forEach(label => {
+            const material = new THREE.MeshBasicMaterial({ 
+                color: label.color, 
+                transparent: true, 
+                opacity: labelOpacity 
+            });
+            const mesh = new THREE.Mesh(labelGeometry, material);
+            mesh.position.set(...label.position);
+            this.scene.add(mesh);
+            this.axes.push(mesh);
+        });
+    }
+
+    handleResize() {
+        if (!this.camera || !this.renderer || !this.container) return;
+        this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    }
+
+    render() {
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+
+    dispose() {
+        if (this.renderer) {
+            this.renderer.dispose();
+        }
+    }
+}
+
+class CameraController {
+    constructor(scene3D) {
+        this.scene3D = scene3D;
+        this.spherical = { radius: 25, theta: 0, phi: Math.PI / 3 };
+        this.isDragging = false;
+        this.lastMouse = { x: 0, y: 0 };
+        
+        this.setupControls();
+    }
+
+    setupControls() {
+        if (!this.scene3D.renderer || !this.scene3D.renderer.domElement) return;
+        
+        this.scene3D.renderer.domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.scene3D.renderer.domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        this.scene3D.renderer.domElement.addEventListener('mouseup', () => this.onMouseUp());
+        this.scene3D.renderer.domElement.addEventListener('wheel', (e) => this.onWheel(e));
+    }
+
+    onMouseDown(e) {
+        this.isDragging = true;
+        this.lastMouse = { x: e.clientX, y: e.clientY };
+    }
+
+    onMouseMove(e) {
+        if (!this.isDragging) return;
+        const delta = { x: e.clientX - this.lastMouse.x, y: e.clientY - this.lastMouse.y };
+        this.spherical.theta += delta.x * 0.01;
+        this.spherical.phi = Utils.clamp(this.spherical.phi + delta.y * 0.01, 0.1, Math.PI - 0.1);
+        this.updateCamera();
+        this.lastMouse = { x: e.clientX, y: e.clientY };
+    }
+
+    onMouseUp() {
+        this.isDragging = false;
+    }
+
+    onWheel(e) {
+        e.preventDefault();
+        this.spherical.radius = Utils.clamp(this.spherical.radius * (1 + e.deltaY * 0.001), 5, 50);
+        this.updateCamera();
+    }
+
+    updateCamera() {
+        if (!this.scene3D.camera) return;
+        this.scene3D.camera.position.x = this.spherical.radius * Math.sin(this.spherical.phi) * Math.sin(this.spherical.theta);
+        this.scene3D.camera.position.y = this.spherical.radius * Math.cos(this.spherical.phi);
+        this.scene3D.camera.position.z = this.spherical.radius * Math.sin(this.spherical.phi) * Math.cos(this.spherical.theta);
+        this.scene3D.camera.lookAt(0, 0, 0);
+    }
+}
+
+class AntennaRenderer {
+    constructor(scene3D) {
+        this.scene3D = scene3D;
+        this.antenna = null;
+        this.feedPoint = null;
+    }
+
+    update(model) {
+        this.clear();
+        
+        try {
+            const wireLength = model.length;
+            
+            const geometry = new THREE.CylinderGeometry(0.05, 0.05, wireLength, 16);
+            const material = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+            this.antenna = new THREE.Mesh(geometry, material);
+            this.antenna.rotation.z = Math.PI / 2;
+            this.scene3D.scene.add(this.antenna);
+            
+            const feedX = (model.feedPosition - 0.5) * wireLength;
+            const feedGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const feedMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+            this.feedPoint = new THREE.Mesh(feedGeometry, feedMaterial);
+            this.feedPoint.position.set(feedX, 0, 0);
+            this.scene3D.scene.add(this.feedPoint);
+        } catch (error) {
+            console.error('Error updating antenna:', error);
+        }
+    }
+
+    clear() {
+        if (this.antenna && this.scene3D.scene) { 
+            this.scene3D.scene.remove(this.antenna); 
+            this.antenna = null; 
+        }
+        if (this.feedPoint && this.scene3D.scene) { 
+            this.scene3D.scene.remove(this.feedPoint); 
+            this.feedPoint = null; 
+        }
+    }
+
+    setVisibility(visible) {
+        if (this.antenna) this.antenna.visible = visible;
+        if (this.feedPoint) this.feedPoint.visible = visible;
+    }
+}
+
+class NodesRenderer {
+    constructor(scene3D) {
+        this.scene3D = scene3D;
+        this.nodeMarkers = [];
+        this.calculator = new NodesCalculator();
+    }
+
+    update(model) {
+        this.clear();
+        
+        try {
+            const nodesData = this.calculator.calculateNodesAndAntinodes(model);
+            this.createNodeMarkers(nodesData);
+        } catch (error) {
+            console.error('Error updating nodes:', error);
+        }
+    }
+
+    createNodeMarkers(nodesData) {
+        nodesData.current.nodes.forEach((position, index) => {
+            this.createMarker(position, CONFIG.NODES.NODE_SIZE, 0xff0000, 'current-node');
+        });
+
+        nodesData.current.antinodes.forEach((position, index) => {
+            this.createMarker(position, CONFIG.NODES.ANTINODE_SIZE, 0xff6600, 'current-antinode');
+        });
+
+        nodesData.voltage.nodes.forEach((position, index) => {
+            this.createMarker(position, CONFIG.NODES.NODE_SIZE, 0x0066ff, 'voltage-node');
+        });
+
+        nodesData.voltage.antinodes.forEach((position, index) => {
+            this.createMarker(position, CONFIG.NODES.ANTINODE_SIZE, 0x00aaff, 'voltage-antinode');
+        });
+    }
+
+    createMarker(position, size, color, type) {
+        const geometry = new THREE.SphereGeometry(size, 16, 16);
+        const material = new THREE.MeshLambertMaterial({ 
+            color: color,
+            transparent: true,
+            opacity: 0.9
+        });
+        
+        const marker = new THREE.Mesh(geometry, material);
+        marker.position.set(position, 0, 0);
+        
+        if (type.includes('antinode')) {
+            const glowGeometry = new THREE.SphereGeometry(size * 1.4, 12, 12);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.3
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.position.set(position, 0, 0);
+            this.scene3D.scene.add(glow);
+            this.nodeMarkers.push(glow);
+        }
+        
+        marker.userData = { type: type, position: position };
+        this.scene3D.scene.add(marker);
+        this.nodeMarkers.push(marker);
+    }
+
+    animateNodes(time) {
+        this.nodeMarkers.forEach(marker => {
+            if (marker.userData && marker.userData.type) {
+                const isAntinode = marker.userData.type.includes('antinode');
+                
+                if (isAntinode) {
+                    const pulse = 0.8 + 0.2 * Math.sin(time * 2);
+                    marker.material.opacity = pulse;
+                    marker.scale.setScalar(0.9 + 0.1 * Math.sin(time * 3));
+                } else {
+                    marker.material.opacity = 0.6 + 0.2 * Math.sin(time * 0.5);
+                }
+            }
+        });
+    }
+
+    clear() {
+        this.nodeMarkers.forEach(marker => {
+            if (this.scene3D.scene) {
+                this.scene3D.scene.remove(marker);
+            }
+        });
+        this.nodeMarkers = [];
+    }
+
+    setVisibility(visible) {
+        this.nodeMarkers.forEach((marker, index) => {
+            marker.visible = visible;
+        });
+    }
+
+    getNodesInfo(model) {
+        return this.calculator.calculateNodesAndAntinodes(model);
+    }
+}
+
+class FieldRenderer {
+    constructor(scene3D) {
+        this.scene3D = scene3D;
+        this.currentCurve = null;
+        this.voltageCurve = null;
+        this.eFields = [];
+        this.hFields = [];
+    }
+
+    update(model) {
+        this.clear();
+        
+        try {
+            this.createCurrentVoltageCurves(model);
+            this.createElectromagneticFields(model);
+        } catch (error) {
+            console.error('Error updating fields:', error);
+        }
+    }
+
+    createCurrentVoltageCurves(model) {
+        const wireLength = model.length;
+        const numPoints = CONFIG.RENDERING.CURVE_POINTS;
+        
+        const positions = [];
+        for (let i = 0; i < numPoints; i++) {
+            const x = (i / (numPoints - 1)) * wireLength - wireLength/2;
+            positions.push(x);
+        }
+        
+        const distributions = model.getSpatialDistributions(positions);
+        
+        this.currentCurve = this.createCurve(
+            positions.map(x => new THREE.Vector3(x, 0, 0)),
+            distributions.current,
+            0x00aaff
+        );
+        
+        this.voltageCurve = this.createCurve(
+            positions.map(x => new THREE.Vector3(x, 0, 0)),
+            distributions.voltage,
+            0xff6b35
+        );
+    }
+
+    createCurve(points, amplitudes, color) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        geometry.setAttribute('amplitude', new THREE.Float32BufferAttribute(amplitudes, 1));
+        const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
+        const curve = new THREE.Line(geometry, material);
+        curve.userData.amplitudes = amplitudes;
+        this.scene3D.scene.add(curve);
+        return curve;
+    }
+
+    createElectromagneticFields(model) {
+        const wireLength = model.length;
+        this.createEFields(wireLength);
+        this.createHFields(wireLength);
+    }
+
+    createEFields(wireLength) {
+        for (let i = 0; i < 4; i++) {
+            const height = 1 + i * 0.8;
+            
+            const fieldAbove = this.createEFieldLine(wireLength, height);
+            this.eFields.push(fieldAbove);
+            
+            const fieldBelow = this.createEFieldLine(wireLength, -height);
+            this.eFields.push(fieldBelow);
+        }
+    }
+
+    createEFieldLine(wireLength, height) {
+        const points = [];
+        const curvePattern = [];
+        
+        for (let t = 0; t <= 1; t += 0.1) {
+            const x = (t - 0.5) * wireLength;
+            const y = 0;
+            points.push(new THREE.Vector3(x, y, 0));
+            curvePattern.push(height * Math.sin(Math.PI * t));
+        }
+        
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ 
+            color: 0xff3366, 
+            transparent: true, 
+            opacity: CONFIG.RENDERING.FIELD_OPACITY
+        });
+        const field = new THREE.Line(geometry, material);
+        
+        field.userData = {
+            fieldType: 'eField',
+            baseOpacity: CONFIG.RENDERING.FIELD_OPACITY,
+            maxHeight: height,
+            curvePattern: curvePattern
+        };
+        
+        this.scene3D.scene.add(field);
+        return field;
+    }
+
+    createHFields(wireLength) {
+        for (let i = 0; i < 7; i++) {
+            const x = (i / 6 - 0.5) * wireLength * 0.9;
+            const baseRadius = 0.5 + i * 0.1;
+            
+            const geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.3, CONFIG.RENDERING.RING_SEGMENTS);
+            const material = new THREE.MeshBasicMaterial({ 
+                color: 0x00aaff, 
+                transparent: true, 
+                opacity: 0.4, 
+                side: THREE.DoubleSide 
+            });
+            const field = new THREE.Mesh(geometry, material);
+            
+            field.position.set(x, 0, 0);
+            field.rotation.y = Math.PI / 2;
+            
+            field.userData = {
+                fieldType: 'hField',
+                baseOpacity: 0.4,
+                baseRadius: baseRadius,
+                maxRadius: baseRadius + 1.0 + i * 0.2,
+                positionFactor: Math.abs(i / 6 - 0.5) * 2
+            };
+            
+            this.hFields.push(field);
+            this.scene3D.scene.add(field);
+        }
+    }
+
+    clear() {
+        if (this.currentCurve && this.scene3D.scene) { 
+            this.scene3D.scene.remove(this.currentCurve); 
+            this.currentCurve = null; 
+        }
+        if (this.voltageCurve && this.scene3D.scene) { 
+            this.scene3D.scene.remove(this.voltageCurve); 
+            this.voltageCurve = null; 
+        }
+        
+        this.eFields.forEach(field => this.scene3D.scene.remove(field));
+        this.eFields = [];
+        
+        this.hFields.forEach(field => this.scene3D.scene.remove(field));
+        this.hFields = [];
+    }
+
+    setVisibility(visibility) {
+        if (this.currentCurve) this.currentCurve.visible = visibility.current;
+        if (this.voltageCurve) this.voltageCurve.visible = visibility.voltage;
+        this.eFields.forEach(field => field.visible = visibility.fields);
+        this.hFields.forEach(field => field.visible = visibility.advancedFields);
+    }
+
+    getAllFields() {
+        return [...this.eFields, ...this.hFields];
+    }
+
+    getCurves() {
+        return {
+            current: this.currentCurve,
+            voltage: this.voltageCurve
+        };
+    }
+}
+
+class AnimationController {
+    constructor(fieldRenderer, nodesRenderer) {
+        this.fieldRenderer = fieldRenderer;
+        this.nodesRenderer = nodesRenderer;
+        this.advancedFieldsEnabled = true;
+    }
+
+    updateAnimation(time, isPlaying, model) {
+        if (!isPlaying) return;
+        
+        const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
+        const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
+        
+        const curves = this.fieldRenderer.getCurves();
+        if (curves.current && curves.current.userData.amplitudes) {
+            this.updateCurve(curves.current, time, 0);
+        }
+        if (curves.voltage && curves.voltage.userData.amplitudes) {
+            this.updateCurve(curves.voltage, time, phaseAngle);
+        }
+        
+        if (this.nodesRenderer) {
+            this.nodesRenderer.animateNodes(time);
+        }
+        
+        if (this.advancedFieldsEnabled) {
+            this.updateAdvancedFieldAnimation(time, phaseAngle, model);
+        } else {
+            this.updateSimpleFieldAnimation(time, phaseAngle, model);
+        }
+    }
+
+    updateCurve(curve, time, phaseShift) {
+        if (!curve || !curve.geometry || !curve.geometry.attributes.position) return;
+        
+        const positions = curve.geometry.attributes.position.array;
+        const amplitudes = curve.userData.amplitudes;
+        
+        if (amplitudes) {
+            for (let i = 0; i < amplitudes.length; i++) {
+                const amplitude = amplitudes[i];
+                const animatedY = Math.sin(time + phaseShift) * amplitude;
+                if (i * 3 + 1 < positions.length) {
+                    positions[i * 3 + 1] = animatedY;
+                }
+            }
+            curve.geometry.attributes.position.needsUpdate = true;
+        }
+    }
+
+    updateAdvancedFieldAnimation(time, phaseAngle, model) {
+        const k = model ? model.waveNumber : 1;
+        const allFields = this.fieldRenderer.getAllFields();
+        
+        allFields.forEach(field => {
+            if (!field.material || field.material.opacity === undefined) return;
+            
+            const isEField = field.userData.fieldType === 'eField';
+            
+            if (isEField && field.userData.curvePattern) {
+                this.animateEField(field, time, phaseAngle);
+            } else if (!isEField && field.userData.maxRadius) {
+                this.animateHField(field, time, k);
+            }
+        });
+    }
+
+    animateEField(field, time, phaseAngle) {
+        const eFieldPhase = time + phaseAngle;
+        const fieldStrength = Math.abs(Math.sin(eFieldPhase));
+        const positions = field.geometry.attributes.position.array;
+        const curvePattern = field.userData.curvePattern;
+        
+        for (let i = 0; i < curvePattern.length && i * 3 + 1 < positions.length; i++) {
+            positions[i * 3 + 1] = curvePattern[i] * fieldStrength;
+        }
+        
+        field.geometry.attributes.position.needsUpdate = true;
+        field.material.opacity = Math.max(0.2, fieldStrength * field.userData.baseOpacity);
+    }
+
+    animateHField(field, time, k) {
+        const position = field.position.x;
+        const distanceFromCenter = Math.abs(position);
+        
+        const propagationDelay = k * distanceFromCenter;
+        const totalPhase = time - propagationDelay;
+        
+        const positionFactor = field.userData.positionFactor || 0;
+        const currentDistribution = Math.cos(positionFactor * Math.PI / 2);
+        
+        const fieldValue = Math.sin(totalPhase) * currentDistribution;
+        const fieldStrength = Math.max(0.1, Math.abs(fieldValue));
+        
+        const baseRadius = field.userData.baseRadius;
+        const maxRadius = field.userData.maxRadius;
+        const currentOuterRadius = baseRadius + (maxRadius - baseRadius) * fieldStrength;
+        
+        if (field.geometry) {
+            field.geometry.dispose();
+        }
+        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+        
+        field.material.opacity = Math.max(0.1, Math.min(0.7, fieldStrength * field.userData.baseOpacity));
+    }
+
+    updateSimpleFieldAnimation(time, phaseAngle, model) {
+        const allFields = this.fieldRenderer.getAllFields();
+        
+        allFields.forEach(field => {
+            if (!field.material || field.material.opacity === undefined) return;
+            
+            const isEField = field.userData.fieldType === 'eField';
+            
+            if (isEField) {
+                const eFieldPhase = time + phaseAngle;
+                field.material.opacity = field.userData.baseOpacity * (0.4 + Math.abs(Math.sin(eFieldPhase)) * 0.4);
+            } else {
+                const position = field.position.x;
+                const distanceFromCenter = Math.abs(position);
+                const propagationDelay = (model ? model.waveNumber : 1) * distanceFromCenter;
+                const delayedTime = time - propagationDelay;
+                
+                let fieldStrength = 0.4 + Math.abs(Math.sin(delayedTime)) * 0.4;
+                
+                if (field.userData.positionFactor !== undefined) {
+                    const currentDistribution = Math.cos(field.userData.positionFactor * Math.PI / 2);
+                    fieldStrength *= currentDistribution;
+                    
+                    if (field.userData.baseRadius) {
+                        const baseRadius = field.userData.baseRadius;
+                        const maxRadius = field.userData.maxRadius;
+                        const currentOuterRadius = baseRadius + (maxRadius - baseRadius) * fieldStrength;
+                        
+                        if (field.geometry) {
+                            field.geometry.dispose();
+                        }
+                        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+                    }
+                }
+                
+                field.material.opacity = field.userData.baseOpacity * fieldStrength;
+            }
+        });
+    }
+
+    resetAnimation(model) {
+        const impedance = model ? model.calculateImpedance() : { resistance: 73, reactance: 0 };
+        const phaseAngle = model ? model.physics.calculatePhaseRelationship(impedance).phaseAngle : 0;
+        
+        const curves = this.fieldRenderer.getCurves();
+        if (curves.current && curves.current.userData.amplitudes) {
+            this.updateCurve(curves.current, 0, 0);
+        }
+        if (curves.voltage && curves.voltage.userData.amplitudes) {
+            this.updateCurve(curves.voltage, 0, phaseAngle);
+        }
+        
+        const allFields = this.fieldRenderer.getAllFields();
+        allFields.forEach(field => {
+            if (field.material && field.material.opacity !== undefined) {
+                field.material.opacity = field.userData.baseOpacity * 0.2;
+                
+                if (field.userData.fieldType === 'hField' && field.userData.baseRadius) {
+                    if (field.geometry) {
+                        field.geometry.dispose();
+                    }
+                    const baseRadius = field.userData.baseRadius;
+                    field.geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.05, CONFIG.RENDERING.RING_SEGMENTS);
+                }
+            }
+        });
+    }
+
+    setAdvancedFieldsEnabled(enabled) {
+        this.advancedFieldsEnabled = enabled;
+    }
+}
+
+class PerformanceMonitor {
+    constructor(elementId) {
+        this.element = document.getElementById(elementId);
+        this.lastTime = performance.now();
+        this.frameCount = 0;
+        this.fps = 0;
+        this.fpsHistory = [];
+        this.maxHistory = 60;
+    }
+
+    update() {
+        const currentTime = performance.now();
+        const deltaTime = currentTime - this.lastTime;
+        
+        this.fpsHistory.push(deltaTime);
+        
+        if (this.fpsHistory.length > this.maxHistory) {
+            this.fpsHistory.shift();
+        }
+        
+        if (this.fpsHistory.length > 5) {
+            const avgFrameTime = this.fpsHistory.reduce((a, b) => a + b) / this.fpsHistory.length;
+            this.fps = Math.round(1000 / avgFrameTime);
+            
+            if (this.element) {
+                this.element.textContent = `FPS: ${this.fps}`;
+                
+                if (this.fps >= 55) {
+                    this.element.style.color = '#00ff00';
+                } else if (this.fps >= 30) {
+                    this.element.style.color = '#ffaa00';
+                } else {
+                    this.element.style.color = '#ff3366';
+                }
+            }
+        }
+        
+        this.lastTime = currentTime;
+    }
+
+    getFPS() {
+        return this.fps;
+    }
+}
+
+class ThreeDRenderer {
+    constructor(containerId) {
+        this.container = document.getElementById(containerId);
+        this.model = null;
+        
+        try {
+            this.scene3D = new Scene3D(this.container);
+            this.cameraController = new CameraController(this.scene3D);
+            this.antennaRenderer = new AntennaRenderer(this.scene3D);
+            this.fieldRenderer = new FieldRenderer(this.scene3D);
+            this.nodesRenderer = new NodesRenderer(this.scene3D);
+            this.animationController = new AnimationController(this.fieldRenderer, this.nodesRenderer);
+            this.performanceMonitor = new PerformanceMonitor('fps-monitor');
+            
+        } catch (error) {
+            console.error('ThreeJS initialization failed:', error);
+            this.handleInitializationError(error);
+        }
+    }
+
+    handleInitializationError(error) {
+        const fpsElement = document.getElementById('fps-monitor');
+        if (fpsElement) {
+            fpsElement.style.display = 'none';
+        }
+        
+        this.container.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #ff6666; text-align: center;">
+                <div>
+                    <h3>3D Visualization Error</h3>
+                    <p>Unable to initialize WebGL renderer.</p>
+                    <p>Please check if your browser supports WebGL.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    updateAntenna(model) {
+        this.model = model;
+        this.antennaRenderer.update(model);
+    }
+
+    updateFields(model) {
+        this.model = model;
+        this.fieldRenderer.update(model);
+        this.nodesRenderer.update(model);
+    }
+
+    updateAnimation(time, isPlaying) {
+        this.animationController.updateAnimation(time, isPlaying, this.model);
+    }
+
+    resetAnimation() {
+        this.animationController.resetAnimation(this.model);
+        this.render();
+    }
+
+    updateVisibility(visibility) {
+        this.antennaRenderer.setVisibility(visibility.antenna);
+        this.fieldRenderer.setVisibility(visibility);
+        this.nodesRenderer.setVisibility(visibility.nodes);
+        this.scene3D.axes.forEach(axis => axis.visible = true);
+        this.animationController.setAdvancedFieldsEnabled(visibility.advancedFields);
+    }
+
+    getNodesInfo(model) {
+        return this.nodesRenderer.getNodesInfo(model);
+    }
+
+    render() {
+        if (this.scene3D) {
+            this.scene3D.render();
+            this.performanceMonitor.update();
+        }
+    }
+
+    handleResize() {
+        if (this.scene3D) {
+            this.scene3D.handleResize();
+        }
+    }
+
+    dispose() {
+        if (this.scene3D) {
+            this.scene3D.dispose();
+        }
+    }
+}
+
+// =====================================================================
 // UI CONTROLLER AND DISPLAY MANAGER
 // =====================================================================
 

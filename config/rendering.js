@@ -1,0 +1,16 @@
+﻿// config/rendering.js
+export const RENDERING_CONFIG = {
+    FIELD_OPACITY: 0.6,
+    AXIS_OPACITY: 0.3,
+    RING_SEGMENTS: 32,
+    CURVE_POINTS: 50,
+    AXIS_LENGTH: 15,
+    LABEL_DISTANCE: 16
+};
+
+export const NODES_CONFIG = {
+    NODE_SIZE: 0.25,
+    ANTINODE_SIZE: 0.35,
+    MIN_AMPLITUDE_THRESHOLD: 0.1,
+    POSITION_TOLERANCE: 0.05
+};

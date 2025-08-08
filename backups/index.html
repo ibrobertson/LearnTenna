@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LearnTenna: An Antenna Visualizer by N0DEF</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>LearnTenna</h1>
+        <h2>Antenna Visualizer by N0DEF</h2>
+        
+        <div id="canvas-container">
+            <div id="fps-monitor">FPS: --</div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #ff0000;"></div>
+                <span>Current Nodes (I=0)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #ff6600;"></div>
+                <span>Current Antinodes (I=max)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #0066ff;"></div>
+                <span>Voltage Nodes (V=0)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #00aaff;"></div>
+                <span>Voltage Antinodes (V=max)</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h4>Antenna Parameters</h4>
+                <div class="control-item">
+                    <label>Length (m):</label>
+                    <input type="range" id="lengthSlider" min="1" max="100" value="20" step="0.1">
+                    <input type="number" id="lengthInput" min="1" max="100" value="20" step="0.1">
+                </div>
+                <div class="control-item">
+                    <label>Freq (MHz):</label>
+                    <input type="range" id="freqSlider" min="0.1" max="50" value="7.5" step="0.01">
+                    <input type="number" id="freqInput" min="0.1" max="50" value="7.5" step="0.01">
+                </div>
+                <div class="control-item">
+                    <label>Feed (%):</label>
+                    <input type="range" id="feedSlider" min="0" max="100" value="50" step="1">
+                    <input type="number" id="feedInput" min="0" max="100" value="50" step="1">
+                </div>
+                <div class="control-item">
+                    <label>Wire Ø (mm):</label>
+                    <input type="range" id="wireSlider" min="0.1" max="20" value="2" step="0.1">
+                    <input type="number" id="wireInput" min="0.1" max="20" value="2" step="0.1">
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Animation</h4>
+                <div style="text-align: center;">
+                    <button id="playBtn">Play</button>
+                    <button id="pauseBtn" disabled>Pause</button>
+                    <button id="resetBtn">Reset</button>
+                </div>
+                <div class="status-display">
+                    <div id="timeDisplay">Time: 0°</div>
+                    <div id="phaseDisplay" style="font-size: 11px; color: #aaa; margin-top: 5px;">
+                        I-V Phase: <span id="phaseAngle">0°</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Matching Network</h4>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use1to1Balun"> 1:1 Balun</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use4to1Balun"> 4:1 Balun</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use9to1UnUn"> 9:1 UnUn</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="use49to1UnUn"> 49:1 UnUn</label>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h4>Visibility</h4>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showAntenna" checked> Antenna</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showCurrent" checked> Current</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showVoltage" checked> Voltage</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showFields" checked> E-Field</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showAdvancedFields" checked> H-Field</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showNodes" checked> Nodes/Antinodes</label>
+                </div>
+                <div class="control-item">
+                    <label><input type="checkbox" id="showDebug"> Debug Info</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-box">
+                <h3>Current Settings</h3>
+                <ul>
+                    <li>Length: <span class="value" id="currentLength">20m</span></li>
+                    <li>Frequency: <span class="value" id="currentFreq">7.5 MHz</span></li>
+                    <li>Wavelength: <span class="value" id="currentWavelength">40.0m</span></li>
+                    <li>Electrical Length: <span class="value" id="currentElectricalLength">0.5λ</span></li>
+                    <li>Wire Diameter: <span class="value" id="currentWireDia">2.0mm</span></li>
+                </ul>
+            </div>
+            
+            <div class="info-box">
+                <h3>Feedpoint Analysis</h3>
+                <ul>
+                    <li>Feed Position: <span class="value" id="feedPositionDisplay">Center Fed (50%)</span></li>
+                    <li>Antenna Z: <span class="value" id="antennaImpedanceDisplay">73 Ω</span></li>
+                    <li>Matching: <span class="value" id="matchingTypeDisplay">None</span></li>
+                    <li>System Z: <span class="value" id="impedanceDisplay">73 Ω</span></li>
+                    <li>SWR (50Ω): <span class="value" id="swrDisplay">1.5:1</span></li>
+                    <li>Match Quality: <span class="value" id="qualityDisplay">Good</span></li>
+                    <li>Antenna Type: <span class="value" id="antennaType">Half-Wave Dipole</span></li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>Resonance Analysis</h3>
+                <ul>
+                    <li>Harmonic: <span class="value" id="harmonicNumber">1st (Fundamental)</span></li>
+                    <li>Current Nodes: <span class="value" id="currentNodesCount">2</span></li>
+                    <li>Current Antinodes: <span class="value" id="currentAntinodesCount">1</span></li>
+                    <li>Voltage Nodes: <span class="value" id="voltageNodesCount">1</span></li>
+                    <li>Voltage Antinodes: <span class="value" id="voltageAntinodesCount">2</span></li>
+                    <li>Resonant: <span class="value" id="resonantStatus">Yes</span></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="debug-panel" id="debugPanel" style="display: none;">
+            <h4>Debug Information</h4>
+            <div id="debugContent"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

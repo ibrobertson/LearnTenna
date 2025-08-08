@@ -1,0 +1,12 @@
+﻿// config/constants.js
+export const UI_CONFIG = {
+    ANIMATION_STEP: 0.05,
+    FPS_HISTORY_LENGTH: 60,
+    DEBUG_UPDATE_INTERVAL: 100
+};
+
+export const CACHE_CONFIG = {
+    MAX_IMPEDANCE_CACHE: 1000,
+    MAX_DISTRIBUTION_CACHE: 500,
+    CACHE_CLEANUP_INTERVAL: 30000
+};

@@ -1,4 +1,4 @@
-﻿import { PHYSICS_CONSTANTS, PHYSICS_LIMITS } from './constants.js';
+import { PHYSICS_CONSTANTS, PHYSICS_LIMITS } from './constants.js';
 import { PhysicsUtils } from './physicsutils.js';
 
 export class ImpedanceCalculator {

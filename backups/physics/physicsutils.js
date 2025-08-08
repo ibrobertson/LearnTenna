@@ -1,11 +1,11 @@
-﻿export const PhysicsUtils = {
+export const PhysicsUtils = {
     clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
     log10: Math.log10 || ((x) => Math.log(x) / Math.LN10),
     
     formatImpedance: (resistance, reactance) => {
         const R = Math.round(resistance);
         const X = Math.round(reactance);
-        return Math.abs(X) < 1 ? `${R} Î©` : `${R} ${X >= 0 ? '+' : ''}j${X} Î©`;
+        return Math.abs(X) < 1 ? `${R} Ω` : `${R} ${X >= 0 ? '+' : ''}j${X} Ω`;
     },
     
     calculateSWR: (resistance, reactance, z0 = 50) => {
