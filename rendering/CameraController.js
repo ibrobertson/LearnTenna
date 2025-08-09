@@ -1,4 +1,4 @@
-﻿class CameraController {
+﻿export class CameraController {
     constructor(scene3D) {
         this.scene3D = scene3D;
         this.spherical = { radius: 25, theta: 0, phi: Math.PI / 3 };

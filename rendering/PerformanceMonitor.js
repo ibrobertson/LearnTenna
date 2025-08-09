@@ -1,4 +1,4 @@
-﻿class PerformanceMonitor {
+﻿export class PerformanceMonitor {
     constructor(elementId) {
         this.element = document.getElementById(elementId);
         this.lastTime = performance.now();

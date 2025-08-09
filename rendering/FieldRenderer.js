@@ -1,4 +1,6 @@
-﻿class FieldRenderer {
+﻿import { RENDERING_CONFIG } from '../config/rendering.js';
+
+export class FieldRenderer {
     constructor(scene3D) {
         this.scene3D = scene3D;
         this.currentCurve = null;
@@ -20,7 +22,7 @@
 
     createCurrentVoltageCurves(model) {
         const wireLength = model.length;
-        const numPoints = CONFIG.RENDERING.CURVE_POINTS;
+        const numPoints = RENDERING_CONFIG.CURVE_POINTS;
         
         const positions = [];
         for (let i = 0; i < numPoints; i++) {
@@ -86,13 +88,13 @@
         const material = new THREE.LineBasicMaterial({ 
             color: 0xff3366, 
             transparent: true, 
-            opacity: CONFIG.RENDERING.FIELD_OPACITY
+            opacity: RENDERING_CONFIG.FIELD_OPACITY
         });
         const field = new THREE.Line(geometry, material);
         
         field.userData = {
             fieldType: 'eField',
-            baseOpacity: CONFIG.RENDERING.FIELD_OPACITY,
+            baseOpacity: RENDERING_CONFIG.FIELD_OPACITY,
             maxHeight: height,
             curvePattern: curvePattern
         };
@@ -106,7 +108,7 @@
             const x = (i / 6 - 0.5) * wireLength * 0.9;
             const baseRadius = 0.5 + i * 0.1;
             
-            const geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.3, CONFIG.RENDERING.RING_SEGMENTS);
+            const geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.3, RENDERING_CONFIG.RING_SEGMENTS);
             const material = new THREE.MeshBasicMaterial({ 
                 color: 0x00aaff, 
                 transparent: true, 
@@ -167,7 +169,7 @@
     }
 }
 
-class AnimationController {
+export class AnimationController {
     constructor(fieldRenderer, nodesRenderer) {
         this.fieldRenderer = fieldRenderer;
         this.nodesRenderer = nodesRenderer;
@@ -268,7 +270,7 @@ class AnimationController {
         if (field.geometry) {
             field.geometry.dispose();
         }
-        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, RENDERING_CONFIG.RING_SEGMENTS);
         
         field.material.opacity = Math.max(0.1, Math.min(0.7, fieldStrength * field.userData.baseOpacity));
     }
@@ -304,7 +306,7 @@ class AnimationController {
                         if (field.geometry) {
                             field.geometry.dispose();
                         }
-                        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, CONFIG.RENDERING.RING_SEGMENTS);
+                        field.geometry = new THREE.RingGeometry(baseRadius, currentOuterRadius, RENDERING_CONFIG.RING_SEGMENTS);
                     }
                 }
                 
@@ -335,7 +337,7 @@ class AnimationController {
                         field.geometry.dispose();
                     }
                     const baseRadius = field.userData.baseRadius;
-                    field.geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.05, CONFIG.RENDERING.RING_SEGMENTS);
+                    field.geometry = new THREE.RingGeometry(baseRadius, baseRadius + 0.05, RENDERING_CONFIG.RING_SEGMENTS);
                 }
             }
         });

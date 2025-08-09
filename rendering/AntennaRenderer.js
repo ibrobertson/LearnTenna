@@ -1,4 +1,4 @@
-﻿class AntennaRenderer {
+﻿export class AntennaRenderer {
     constructor(scene3D) {
         this.scene3D = scene3D;
         this.antenna = null;

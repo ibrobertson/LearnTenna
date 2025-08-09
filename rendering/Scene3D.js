@@ -1,4 +1,6 @@
-﻿class Scene3D {
+﻿import { RENDERING_CONFIG } from '../config/rendering.js';
+
+export class Scene3D {
     constructor(container) {
         this.container = container;
         this.scene = null;
@@ -38,8 +40,8 @@
     }
 
     addCoordinateAxes() {
-        const axisLength = CONFIG.RENDERING.AXIS_LENGTH;
-        const axisOpacity = CONFIG.RENDERING.AXIS_OPACITY;
+        const axisLength = RENDERING_CONFIG.AXIS_LENGTH;
+        const axisOpacity = RENDERING_CONFIG.AXIS_OPACITY;
         
         const axes = [
             { color: 0xff0000, direction: [axisLength, 0, 0] },
@@ -66,7 +68,7 @@
     }
 
     addAxisLabels() {
-        const labelDistance = CONFIG.RENDERING.LABEL_DISTANCE;
+        const labelDistance = RENDERING_CONFIG.LABEL_DISTANCE;
         const labelOpacity = 0.4;
         const labelGeometry = new THREE.SphereGeometry(0.2, 8, 8);
         

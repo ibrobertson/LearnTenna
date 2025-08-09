@@ -1,4 +1,11 @@
-﻿class ThreeDRenderer {
+﻿import { Scene3D } from './Scene3D.js';
+import { CameraController } from './CameraController.js';
+import { AntennaRenderer } from './AntennaRenderer.js';
+import { FieldRenderer, AnimationController } from './FieldRenderer.js';
+import { NodesRenderer } from './NodesRenderer.js';
+import { PerformanceMonitor } from './PerformanceMonitor.js';
+
+export class ThreeDRenderer {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.model = null;

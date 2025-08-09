@@ -1,4 +1,7 @@
-﻿class NodesRenderer {
+﻿import { NodesCalculator } from '../physics/nodescalculator.js';
+import { NODES_CONFIG } from '../config/rendering.js';
+
+export class NodesRenderer {
     constructor(scene3D) {
         this.scene3D = scene3D;
         this.nodeMarkers = [];
